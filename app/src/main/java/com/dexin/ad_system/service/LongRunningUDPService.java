@@ -10,7 +10,7 @@ import android.support.v4.app.NotificationCompat;
 import com.dexin.ad_system.R;
 import com.dexin.ad_system.cdr.CDRWifiUDPPayloadQueue;
 import com.dexin.ad_system.cdr.CDRWifiUDPReceiver;
-import com.dexin.ad_system.util.MyApplication;
+import com.dexin.ad_system.util.CustomApplication;
 
 public class LongRunningUDPService extends Service {
     private CDRWifiUDPPayloadQueue mCDRWifiUDPPayloadQueue = CDRWifiUDPPayloadQueue.getInstance();
@@ -58,7 +58,7 @@ public class LongRunningUDPService extends Service {
      */
     private void startServiceWithForegroundMode() {
         //FIXME NotificationCompat
-        Notification notification = new NotificationCompat.Builder(MyApplication.getContext())
+        Notification notification = new NotificationCompat.Builder(CustomApplication.getContext())
                 .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher))
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("CDR广告系统")

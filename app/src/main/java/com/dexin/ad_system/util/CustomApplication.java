@@ -6,7 +6,9 @@ import android.content.Context;
 import com.blankj.utilcode.util.Utils;
 import com.vondear.rxtools.RxTool;
 
-public class MyApplication extends Application {
+import org.jetbrains.annotations.Contract;
+
+public class CustomApplication extends Application {
     private static Context context;//TODO 这里static所修饰的context并不会引起内存泄漏，因为static数据与单例的context同生命周期
 
     /**
@@ -14,6 +16,7 @@ public class MyApplication extends Application {
      *
      * @return 全局的 context对象
      */
+    @Contract(pure = true)
     public static Context getContext() {
         return context;
     }

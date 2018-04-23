@@ -34,7 +34,7 @@ import com.blankj.utilcode.util.RegexUtils;
 import com.dexin.ad_system.R;
 import com.dexin.ad_system.service.LongRunningUDPService;
 import com.dexin.ad_system.util.Const;
-import com.dexin.ad_system.util.MyApplication;
+import com.dexin.ad_system.util.CustomApplication;
 import com.vondear.rxtools.RxBarTool;
 
 import java.io.BufferedReader;
@@ -50,12 +50,10 @@ import java.util.TimerTask;
 
 //TODO IP地址和端口号设置在SP中，当SP发生改变的时候执行onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)方法
 public class MainActivity extends AppCompatActivity {
-    public static final int FLAG_HOMEKEY_DISPATCHED = 0x80000000;
-    private static final int PLAY_LANTERN_SLIDE_IMAGE = 921;
-    private static final int HIDE_VIDEO_VIEW = 441;
+    private static final int FLAG_HOMEKEY_DISPATCHED = 0x80000000;//HOME键分发标志
 
-    //TODO 一、公共常量
-    private Context mContext;
+    private static final int PLAY_LANTERN_SLIDE_IMAGE = 921;//播放幻灯片图像
+    private static final int HIDE_VIDEO_VIEW = 441;//隐藏VideoView
 
     //TODO 二、UI
     private ImageView ivShow;
@@ -169,9 +167,6 @@ public class MainActivity extends AppCompatActivity {
      * 初始化成员变量
      */
     private void initMemberVar() {
-        //TODO 一、公共常量
-        mContext = MyApplication.getContext();
-
         //TODO 二、UI
         ivShow = findViewById(R.id.iv_show);
 /*
@@ -187,12 +182,12 @@ public class MainActivity extends AppCompatActivity {
         vMenu = findViewById(R.id.v_menu);
 
         //TODO 三、广播
-        mLocalBroadcastManager = LocalBroadcastManager.getInstance(mContext);
+        mLocalBroadcastManager = LocalBroadcastManager.getInstance(CustomApplication.getContext());
         mLocalCDRBroadcastReceiver = new LocalCDRBroadcastReceiver();
         mLocalBroadcastManager.registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST));
 
         //TODO 四、缓存
-        mSP = PreferenceManager.getDefaultSharedPreferences(mContext);        //单例的SP
+        mSP = PreferenceManager.getDefaultSharedPreferences(CustomApplication.getContext());        //单例的SP
 
         //TODO 五、创建WifiLock和MulticastLock
         WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
@@ -258,7 +253,7 @@ public class MainActivity extends AppCompatActivity {
                         stopService(new Intent(MainActivity.this, LongRunningUDPService.class));
                         startService(new Intent(MainActivity.this, LongRunningUDPService.class));
                     } else {
-                        Toast.makeText(mContext, "您输入的 IP 或 端口 不符合格式要求。\n请长按屏幕重新设置。", Toast.LENGTH_LONG).show();
+                        Toast.makeText(CustomApplication.getContext(), "您输入的 IP 或 端口 不符合格式要求。\n请长按屏幕重新设置。", Toast.LENGTH_LONG).show();
                         setServerIP_Port();                     //TODO 弹出对话框请求重新输入
                     }
                 })
@@ -408,14 +403,14 @@ public class MainActivity extends AppCompatActivity {
                     isSlideShowImage = true;
                 }
 
-                Toast.makeText(MyApplication.getContext(), "收到    图片", Toast.LENGTH_LONG).show();
+                Toast.makeText(CustomApplication.getContext(), "收到    图片", Toast.LENGTH_LONG).show();
             } else if (filePath.endsWith(".txt")) {
                 //2.显示文字
                 txtList.add(filePath);
 //                vmtvDetail.setText(Const.LINE_HEAD + loadText(txtList));
                 mTvDetail.setText(MessageFormat.format("{0}{1}", Const.LINE_HEAD, loadText(txtList)));
 
-                Toast.makeText(MyApplication.getContext(), "收到    文字", Toast.LENGTH_LONG).show();
+                Toast.makeText(CustomApplication.getContext(), "收到    文字", Toast.LENGTH_LONG).show();
             } else if (filePath.endsWith(".mp3") || filePath.endsWith(".wav")) {                                                        //4.播放音乐
                 initMediaPlayerAndPlayMusic(filePath);
 
@@ -429,10 +424,10 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }, 5000, 10000);
 
-                Toast.makeText(MyApplication.getContext(), "收到    音频", Toast.LENGTH_LONG).show();
+                Toast.makeText(CustomApplication.getContext(), "收到    音频", Toast.LENGTH_LONG).show();
             } else if (filePath.endsWith(".avi") || filePath.endsWith(".mp4") || filePath.endsWith(".rmvb") || filePath.endsWith(".wmv") || filePath.endsWith(".3gp")) {    //3.显示视频
 
-                Toast.makeText(MyApplication.getContext(), "收到    视频", Toast.LENGTH_LONG).show();
+                Toast.makeText(CustomApplication.getContext(), "收到    视频", Toast.LENGTH_LONG).show();
             }
         }
     }

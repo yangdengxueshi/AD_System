@@ -7,8 +7,8 @@ import android.util.Log;
 
 import com.blankj.utilcode.util.FileUtils;
 import com.dexin.ad_system.util.Const;
+import com.dexin.ad_system.util.CustomApplication;
 import com.dexin.ad_system.util.LogUtil;
-import com.dexin.ad_system.util.MyApplication;
 import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
 import com.dexin.utilities.stringhelpers;
@@ -35,7 +35,7 @@ public class CDRUtils {
     //定时器
     private static Timer mTimer = new Timer();
     //本地广播
-    private static LocalBroadcastManager mLocalBroadcastManager = LocalBroadcastManager.getInstance(MyApplication.getContext());
+    private static LocalBroadcastManager mLocalBroadcastManager = LocalBroadcastManager.getInstance(CustomApplication.getContext());
     private static String[] elementFormat = new String[]{".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};      //.3gp  .wav    .mkv    .mov    .mpeg   .flv
 
     /**
