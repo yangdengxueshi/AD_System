@@ -57,8 +57,7 @@ public class LongRunningUDPService extends Service {
      * TODO 以前台服务模式启动Service
      */
     private void startServiceWithForegroundMode() {
-        //FIXME NotificationCompat
-        Notification notification = new NotificationCompat.Builder(CustomApplication.getContext())
+        Notification notification = new NotificationCompat.Builder(CustomApplication.getContext(), "ForgroundService")
                 .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher))
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("CDR广告系统")
