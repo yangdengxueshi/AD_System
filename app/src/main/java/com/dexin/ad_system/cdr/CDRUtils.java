@@ -19,9 +19,6 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import static com.dexin.ad_system.util.Const.head_0x86_value_gky;
-import static com.dexin.utilities.arrayhelpers.GetInt8;
-
 /**
  * CDR 工具
  */
@@ -90,52 +87,6 @@ public class CDRUtils {
     }
 
     /**
-     * 解析接收到的"原始UDP数据包"进而获得"6个TS包"（TS包是顺序排放的），我们只需要 0x86 开头的UDP包(广科院协议)
-     *
-     * @param udpDataPacket 收到的字节数组：原始的UDP数据报
-     * @return "6个TS包的净荷"有序拼接起来的字节数组（长度是1104）
-     */
-    public static byte[] parseUDPPacketToPayload(byte[] udpDataPacket) {
-        if (udpDataPacket == null || udpDataPacket.length < 21 + 311) {
-            LogUtil.d(TAG, "UDP原始数据包为 null 或 长度小于 21+311，可能引起一个Bug！");
-            return new byte[0];
-        } else if (udpDataPacket.length != 1460) {
-            LogUtil.i(TAG, "UDP包长不是1460，可能引起Bug!");
-        }
-
-        if (udpDataPacket[0] != head_0x86_value_gky) {//这个0x86是广科院的头，注意与自定义 head_0x86_value 区分开   //TODO 5.筛选出 0x86 UDP数据报,(如果不是0x86开头的UDP包则抛弃掉)
-            LogUtil.i(TAG, "UDP包头不是0x86，可能引起Bug!");
-            return new byte[0];
-        }
-
-        int tsPacketAbandonedCount = 0;                 //被抛弃的ts包的数量
-        byte[] tsPayloadBuffer = new byte[6 * 184];
-        CopyIndex index = new CopyIndex(21);            //TODO UDP包以 0x86开头，前21字节是协议头(收到后可以删除)，（1460-21-311=1128字节有效）    1128/6=188（每个TS包）
-        //TODO 循环解析一个UDP包中的6个TS包
-        for (int i = 0; i < 6; i++) {
-            byte head_0x47 = GetInt8(udpDataPacket, index);        //TODO byte[]     取出当前同步字节，看是否等于0x47 0F FE xx
-            byte pid_1 = GetInt8(udpDataPacket, index);
-            byte pid_2 = GetInt8(udpDataPacket, index);
-            index.AddIndex(1);          //前面已经+1 +1 +1 ，现在+1，跳过每个TS包的0x47前4个字节的协议头
-
-            if ((head_0x47 != (byte) 0x47) || ((pid_1 & (byte) 0x1F) != (byte) 0x0F) || (pid_2 != (byte) 0xFE)) {   // 三个条件有一个不满足都要将当前ts包抛掉 //TODO TS包以  0x47开头，前4个字节是协议头(0x47 xF FE xx)，其后是184字节净荷     (188-4)
-                index.AddIndex(184);
-                tsPacketAbandonedCount++;
-                continue;
-            }
-
-            byte[] payload184 = arrayhelpers.GetBytes(udpDataPacket, 184, index);        //减去协议头 0x47xxxxxx,得到184字节净荷
-            System.arraycopy(payload184, 0, tsPayloadBuffer, (i - tsPacketAbandonedCount) * 184, 184);
-        }
-        byte[] tsPayloadBufferValid = new byte[(6 - tsPacketAbandonedCount) * 184];
-        System.arraycopy(tsPayloadBuffer, 0, tsPayloadBufferValid, 0, tsPayloadBufferValid.length);
-
-        LogUtil.d(TAG, "124211数据 ts净荷中有效Buffer：" + stringhelpers.bytesToHexString(tsPayloadBufferValid).toUpperCase());
-
-        return tsPayloadBufferValid;                        //TODO 返回每个UDP包中的6个TS包中的净荷拼接起来的字节数组
-    }
-
-    /**
      * 解析配置表的方法，TODO 传递过来的参数一定就是 008888 开头的1024长度 数组
      * <p>
      * TODO 相同版本号的配置表在解析成功的前提下我们只解析一次
@@ -160,14 +111,14 @@ public class CDRUtils {
 
         CopyIndex parseIndex = new CopyIndex(position_87);                    //下标先偏移到 87 位置，才能开始做解析工作
 
-        int table_id = GetInt8(configTableBuffer, parseIndex);                //1.配置表：table_id
+        int table_id = arrayhelpers.GetInt8(configTableBuffer, parseIndex);                //1.配置表：table_id
         if (table_id != (byte) 0x87) {
             LogUtil.e(TAG, "配置表表头不符！退出配置表解析操作。");
             System.gc();
             return;         //根本就不是配置表，丢掉配置表Buffer
         }
 
-        int version_number = GetInt8(configTableBuffer, parseIndex);          //2.配置表：“版本号”
+        int version_number = arrayhelpers.GetInt8(configTableBuffer, parseIndex);          //2.配置表：“版本号”
         if (version_number < 0) {
             LogUtil.e(TAG, "配置表版本号为负！退出配置表解析操作。");
             System.gc();
@@ -211,7 +162,7 @@ public class CDRUtils {
         parseIndex.AddIndex(1);
         parseIndex.AddIndex(1);
 
-        int element_count = GetInt8(configTableBuffer, parseIndex);             //配置表：“元素个数”
+        int element_count = arrayhelpers.GetInt8(configTableBuffer, parseIndex);             //配置表：“元素个数”
         if (element_count < 0) {
             LogUtil.d(TAG, "配置表解析出元素个数小于0，退出配置表解析操作。");
             clearGuidListAndResetVersionNumber();
@@ -229,8 +180,8 @@ public class CDRUtils {
                 parseIndex.AddIndex(1);
                 parseIndex.AddIndex(1);
             } else {
-                int element_type = GetInt8(configTableBuffer, parseIndex);
-                int element_format = GetInt8(configTableBuffer, parseIndex);
+                int element_type = arrayhelpers.GetInt8(configTableBuffer, parseIndex);
+                int element_format = arrayhelpers.GetInt8(configTableBuffer, parseIndex);
                 parseIndex.AddIndex(1);
                 parseIndex.AddIndex(1);
                 guid_list_parsed.add(guid);
@@ -294,14 +245,14 @@ public class CDRUtils {
 
         CopyIndex parseIndex = new CopyIndex(position_86);
 
-        int table_id = GetInt8(sectionBuffer, parseIndex);
+        int table_id = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
         if (table_id != (byte) 0x86) {
             LogUtil.e(TAG, "元素表表头不符！退出元素表解析操作。");
             System.gc();
             return;         //根本就不是配置表，丢掉配置表Buffer
         }
 
-        int version_number = GetInt8(sectionBuffer, parseIndex);
+        int version_number = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
         if (version_number < 0) {
             LogUtil.e(TAG, "元素表版本号为负！退出元素表解析操作。");
             System.gc();
@@ -373,14 +324,14 @@ public class CDRUtils {
         if (sectionsNumberList != null) {
             LogUtil.d(TAG, "段号-->列表Size：" + sectionsNumberList.size() + " 段号-->列表：" + sectionsNumberList.toString());
         }
-        int element_type = GetInt8(sectionBuffer, parseIndex);
+        int element_type = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
         if (element_type < 0) {
             LogUtil.d(TAG, "元素表解析出元素类型小于0，退出元素表解析操作！");
             System.gc();
             return;
         }
 
-        int element_format = GetInt8(sectionBuffer, parseIndex);
+        int element_format = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
         if (element_format < 0) {
             LogUtil.d(TAG, "元素表解析出元素格式小于0，退出元素表解析操作！");
             System.gc();

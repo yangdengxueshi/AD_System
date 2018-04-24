@@ -24,9 +24,9 @@ public class LongRunningUDPService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        new Thread(mCDRWifiUDPPayloadQueue).start();           //处理数据报的线程先开启
+        new Thread(mCDRWifiUDPPayloadQueue).start();//FIXME ① 处理数据报的线程先开启
 
-        //TODO 主线程上不能进行联网操作     ( ① 开启接收数据的线程 )
+        //TODO ② 随后开启接收数据的线程
         new Thread(() -> {                                                      //接收数据包的线程后开启
             try {
                 mCDRWifiUDPReceiver.receiveCDRWifiUDPPacket();                  //网络操作必须在子线程中进行
@@ -44,13 +44,13 @@ public class LongRunningUDPService extends Service {
 
     @Override
     public void onDestroy() {
-        super.onDestroy();
         try {
             mCDRWifiUDPPayloadQueue.stopParsePayloadData();                 //服务停止后不用再解析数据
             mCDRWifiUDPReceiver.stopReceiveCDRWifiUDPPacket();              //服务停止就不再接收数据报
         } catch (Exception e) {
             e.printStackTrace();
         }
+        super.onDestroy();
     }
 
     /**

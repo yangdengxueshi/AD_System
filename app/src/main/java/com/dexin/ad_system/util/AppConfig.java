@@ -10,8 +10,17 @@ import org.jetbrains.annotations.Contract;
  * App配置文件
  */
 public final class AppConfig {
-    public static final int mPort = 8080;           //服务器端口
-    public static final int mUDPPacketSize = 1460;  //UDP包的大小（广科院给的UDP原始包大小就是1460字节）
+    public static final int PORT = 8080;//服务器端口
+    // 21+188*6+311=1460
+    public static final int UDP_PACKET_HEADER_SIZE = 21;//UDP包头长度
+    public static final int TS_PAYLOAD_NO = 6;
+    public static final int TS_PACKET_SIZE = 188;
+    public static final int TS_PAYLOAD_SIZE = 184;
+    public static final int UDP_PACKET_TAIL_SIZE = 311;
+    public static final int UDP_PACKET_SIZE = 1460;//UDP包的大小（广科院给的UDP原始包大小就是1460字节）
+
+    public static final byte UDP_HEAD_0x86_VALUE = (byte) 0x86;//广科院UDP头 0x86
+    public static final byte TS_HEAD_0x47_VALUE = (byte) 0x47;//广科院TS头 0x47
 
     private static final class LocalBroadcastManagerHolder {
         private static final LocalBroadcastManager LOCAL_BROADCAST_MANAGER = LocalBroadcastManager.getInstance(CustomApplication.getContext());
@@ -26,6 +35,7 @@ public final class AppConfig {
     public static LocalBroadcastManager getLocalBroadcastManager() {
         return LocalBroadcastManagerHolder.LOCAL_BROADCAST_MANAGER;
     }
+
 
     private static final class SPUtilsHolder {
         private static final SPUtils SP_UTILS = SPUtils.getInstance();

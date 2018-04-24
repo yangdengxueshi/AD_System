@@ -6,7 +6,6 @@ import android.os.Environment;
  * 定义一些常量
  */
 public class Const {
-    public static final byte head_0x86_value_gky = (byte) 0x86;
     public static final byte head_0x86_value = (byte) 0x86;
     public static final byte head_0x87_value = (byte) 0x87;
     public static final String LINE_HEAD = "\t\t\t\t\t\t";
