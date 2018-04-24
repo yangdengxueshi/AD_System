@@ -14,7 +14,6 @@ import android.os.Handler;
 import android.os.Message;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
-import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.text.InputType;
@@ -33,6 +32,7 @@ import com.blankj.utilcode.util.FileUtils;
 import com.blankj.utilcode.util.RegexUtils;
 import com.dexin.ad_system.R;
 import com.dexin.ad_system.service.LongRunningUDPService;
+import com.dexin.ad_system.util.AppConfig;
 import com.dexin.ad_system.util.Const;
 import com.dexin.ad_system.util.CustomApplication;
 import com.vondear.rxtools.RxBarTool;
@@ -48,6 +48,9 @@ import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
+
 //TODO IP地址和端口号设置在SP中，当SP发生改变的时候执行onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)方法
 public class MainActivity extends AppCompatActivity {
     private static final int FLAG_HOMEKEY_DISPATCHED = 0x80000000;//HOME键分发标志
@@ -55,15 +58,18 @@ public class MainActivity extends AppCompatActivity {
     private static final int PLAY_LANTERN_SLIDE_IMAGE = 921;//播放幻灯片图像
     private static final int HIDE_VIDEO_VIEW = 441;//隐藏VideoView
 
+    @BindView(R.id.iv_show)
+    ImageView mIvShow;
+    @BindView(R.id.tv_detail)
+    TextView mTvDetail;
+    @BindView(R.id.vv_video)
+    VideoView mVvVideo;
+    @BindView(R.id.v_menu)
+    View mVMenu;
     //TODO 二、UI
-    private ImageView ivShow;
     //    private VerticalMarqueeTextView vmtvDetail;
-    private TextView mTvDetail;
-    private VideoView vvVideo;
-    private View vMenu;
 
     //TODO 三、广播
-    private LocalBroadcastManager mLocalBroadcastManager;              //定义“本地广播管理器”
     private LocalCDRBroadcastReceiver mLocalCDRBroadcastReceiver;      //TODO UDP接收器广播,当缓存完成时调用
 
     //TODO 四、缓存
@@ -90,12 +96,12 @@ public class MainActivity extends AppCompatActivity {
                 case PLAY_LANTERN_SLIDE_IMAGE:
                     if (imageList.size() > 0) {
                         Bitmap bitmap = BitmapFactory.decodeFile(imageList.get(currentImageIndex));
-                        ivShow.setImageBitmap(bitmap);
+                        mIvShow.setImageBitmap(bitmap);
                     }
                     break;
                 case HIDE_VIDEO_VIEW:
-                    if (!vvVideo.isPlaying()) {             //没有正在播放视频，就将vvVideoView销毁
-                        vvVideo.setVisibility(View.GONE);
+                    if (!mVvVideo.isPlaying()) {             //没有正在播放视频，就将vvVideoView销毁
+                        mVvVideo.setVisibility(View.GONE);
                     }
                     break;
             }
@@ -108,6 +114,7 @@ public class MainActivity extends AppCompatActivity {
         RxBarTool.hideStatusBar(this);//隐藏掉状态栏
         this.getWindow().setFlags(FLAG_HOMEKEY_DISPATCHED, FLAG_HOMEKEY_DISPATCHED);    //设置为主屏幕的关键代码
         setContentView(R.layout.activity_main);
+        ButterKnife.bind(this);
 
         //初始化成员变量
         initMemberVar();
@@ -119,21 +126,20 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        registerForContextMenu(vMenu);
+        registerForContextMenu(mVMenu);
     }
 
     @Override
     protected void onPause() {
+        mVvVideo.suspend();
         super.onPause();
-        vvVideo.suspend();
     }
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
         //注销工作
-        unregisterForContextMenu(vMenu);
-        mLocalBroadcastManager.unregisterReceiver(mLocalCDRBroadcastReceiver);
+        unregisterForContextMenu(mVMenu);
+        AppConfig.mLocalBroadcastManager.unregisterReceiver(mLocalCDRBroadcastReceiver);
 
         //释放WifiLock和MulticastLock
         if (mWifiLock.isHeld()) mWifiLock.release();
@@ -146,9 +152,10 @@ public class MainActivity extends AppCompatActivity {
         }
 
         //暂停视频
-        if (vvVideo != null) {
-            vvVideo.suspend();
+        if (mVvVideo != null) {
+            mVvVideo.suspend();
         }
+        super.onDestroy();
     }
 
     @Override
@@ -167,8 +174,6 @@ public class MainActivity extends AppCompatActivity {
      * 初始化成员变量
      */
     private void initMemberVar() {
-        //TODO 二、UI
-        ivShow = findViewById(R.id.iv_show);
 /*
         {
             vmtvDetail = findViewById(R.id.vm_tv_detail);
@@ -177,14 +182,9 @@ public class MainActivity extends AppCompatActivity {
             ((TextView) vmtvDetail.getChildAt(0)).setTextSize(52);                                  //TODO 触控一体机设置52,手机设置32
         }
 */
-        mTvDetail = findViewById(R.id.tv_detail);
-        vvVideo = findViewById(R.id.vv_video);
-        vMenu = findViewById(R.id.v_menu);
-
         //TODO 三、广播
-        mLocalBroadcastManager = LocalBroadcastManager.getInstance(CustomApplication.getContext());
         mLocalCDRBroadcastReceiver = new LocalCDRBroadcastReceiver();
-        mLocalBroadcastManager.registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST));
+        AppConfig.mLocalBroadcastManager.registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST));
 
         //TODO 四、缓存
         mSP = PreferenceManager.getDefaultSharedPreferences(CustomApplication.getContext());        //单例的SP
@@ -354,16 +354,16 @@ public class MainActivity extends AppCompatActivity {
      */
     private void playVideo(String filePath) {
         //此时没有在播放视频
-        if (!vvVideo.isPlaying()) {
-            vvVideo.setVisibility(View.VISIBLE);
-            vvVideo.setVideoPath(filePath);
-            vvVideo.start();
+        if (!mVvVideo.isPlaying()) {
+            mVvVideo.setVisibility(View.VISIBLE);
+            mVvVideo.setVideoPath(filePath);
+            mVvVideo.start();
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() {
                     mHandler.sendEmptyMessage(HIDE_VIDEO_VIEW);
                 }
-            }, vvVideo.getDuration() + 1500, 2000);         //周期性（2秒）地检查是否还在播放视频
+            }, mVvVideo.getDuration() + 1500, 2000);         //周期性（2秒）地检查是否还在播放视频
         } else {
             //此时正在播放视频,当前视频播放完毕后再播放新的视频
         }
@@ -380,7 +380,7 @@ public class MainActivity extends AppCompatActivity {
 
             if (deleteMediaList) {                  //判断    是否需要将当前分类多媒体文件集合清空
                 imageList.clear();
-                ivShow.setImageResource(R.drawable.bg_main);
+                mIvShow.setImageResource(R.drawable.bg_main);
 
                 txtList.clear();
 //                vmtvDetail.setText("");
@@ -394,7 +394,7 @@ public class MainActivity extends AppCompatActivity {
             if (filePath.endsWith(".png") || filePath.endsWith(".bmp") || filePath.endsWith(".jpg") || filePath.endsWith(".gif")) {     //1.显示图片
                 //1.显示图片
                 Bitmap bitmap = BitmapFactory.decodeFile(filePath);
-                ivShow.setImageBitmap(bitmap);
+                mIvShow.setImageBitmap(bitmap);
 
                 imageList.add(filePath);
                 currentImageIndex = imageList.indexOf(filePath);

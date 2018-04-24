@@ -1,13 +1,12 @@
 package com.dexin.ad_system.cdr;
 
 import android.content.Intent;
-import android.support.v4.content.LocalBroadcastManager;
 import android.support.v4.util.LongSparseArray;
 import android.util.Log;
 
 import com.blankj.utilcode.util.FileUtils;
+import com.dexin.ad_system.util.AppConfig;
 import com.dexin.ad_system.util.Const;
-import com.dexin.ad_system.util.CustomApplication;
 import com.dexin.ad_system.util.LogUtil;
 import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
@@ -35,7 +34,6 @@ public class CDRUtils {
     //定时器
     private static Timer mTimer = new Timer();
     //本地广播
-    private static LocalBroadcastManager mLocalBroadcastManager = LocalBroadcastManager.getInstance(CustomApplication.getContext());
     private static String[] elementFormat = new String[]{".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};      //.3gp  .wav    .mkv    .mov    .mpeg   .flv
 
     /**
@@ -447,7 +445,7 @@ public class CDRUtils {
                         public void run() {
                             Intent intent = new Intent(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST);                                                                                                               //TODO 删除多媒体文件夹 和 清除分类文件集合 的逻辑
                             intent.putExtra("filePath", file.getName());
-                            mLocalBroadcastManager.sendBroadcast(intent);
+                            AppConfig.mLocalBroadcastManager.sendBroadcast(intent);
                         }
                     }, 500);    //延迟1.5秒发送安卓广播去更新UI
                 }
@@ -489,7 +487,7 @@ public class CDRUtils {
     private static void clearMediaListAndDeleteMediaFolder() {                                                                                                                                      //TODO 删除多媒体文件夹 和 清除分类文件集合 的逻辑
         Intent intent = new Intent(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST);       //1.应该先发送广播请求清空分类文件集合
         intent.putExtra("deleteMediaList", true);
-        mLocalBroadcastManager.sendBroadcast(intent);
+        AppConfig.mLocalBroadcastManager.sendBroadcast(intent);
 
         FileUtils.deleteFilesInDir(Const.FILE_FOLDER);                          //2.再删除本程序多媒体文件夹下的文件     Environment.getExternalStorageDirectory().getPath() + "/AD_System"  ==  /mnt/internal_sd/AD_System
     }
