@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaPlayer;
@@ -12,7 +11,6 @@ import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
-import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
@@ -71,9 +69,6 @@ public class MainActivity extends AppCompatActivity {
 
     //TODO 三、广播
     private LocalCDRBroadcastReceiver mLocalCDRBroadcastReceiver;      //TODO UDP接收器广播,当缓存完成时调用
-
-    //TODO 四、缓存
-    private SharedPreferences mSP;
 
     //TODO 五、创建WifiLock和MulticastLock
     private WifiManager.WifiLock mWifiLock;
@@ -186,9 +181,6 @@ public class MainActivity extends AppCompatActivity {
         mLocalCDRBroadcastReceiver = new LocalCDRBroadcastReceiver();
         AppConfig.mLocalBroadcastManager.registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST));
 
-        //TODO 四、缓存
-        mSP = PreferenceManager.getDefaultSharedPreferences(CustomApplication.getContext());        //单例的SP
-
         //TODO 五、创建WifiLock和MulticastLock
         WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
         mWifiLock = Objects.requireNonNull(manager).createWifiLock("UDP_Wifi_Lock");
@@ -202,7 +194,7 @@ public class MainActivity extends AppCompatActivity {
      * 启动广告系统App
      */
     private void launchADSystemApp() {
-        if (mSP.getBoolean("isFirstLaunch", true)) {        //第一次启动App程序
+        if (AppConfig.getSPUtils().getBoolean("isFirstLaunch", true)) {        //第一次启动App程序
             setServerIP_Port();                             //设置IP地址和端口号后（再开启服务）
         } else {                                                //直接开启服务
             //先创建本程序的媒体文件夹
@@ -232,11 +224,11 @@ public class MainActivity extends AppCompatActivity {
                 return new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.'};
             }
         });
-        etIP.setText(mSP.getString("ip", ""));
+        etIP.setText(AppConfig.getSPUtils().getString("ip", ""));
 
         EditText etPort = tlConfig.findViewById(R.id.et_port);
-        if (mSP.contains("port")) {     //SP中存有port就将其取出设置给控件，不存有就给控件设置空字符串
-            etPort.setText(String.valueOf(mSP.getInt("port", -1)));
+        if (AppConfig.getSPUtils().contains("port")) {     //SP中存有port就将其取出设置给控件，不存有就给控件设置空字符串
+            etPort.setText(String.valueOf(AppConfig.getSPUtils().getInt("port", -1)));
         } else {
             etPort.setText("");
         }
@@ -249,7 +241,9 @@ public class MainActivity extends AppCompatActivity {
 
                     //判断IP输入和端口输入的格式是否正确,如果正确，将其写入SP，如果错误，给出提示。
                     if (RegexUtils.isIP(ipStr) && (0 <= portValue && portValue <= 65535)) {
-                        mSP.edit().putBoolean("isFirstLaunch", false).putString("ip", ipStr).putInt("port", portValue).apply();             //点击了“确定”才认为APP不再是第一次启动了，并且设置了IP和端口号
+                        AppConfig.getSPUtils().put("isFirstLaunch", false);
+                        AppConfig.getSPUtils().put("ip", ipStr);
+                        AppConfig.getSPUtils().put("port", portValue);             //点击了“确定”才认为APP不再是第一次启动了，并且设置了IP和端口号
                         stopService(new Intent(MainActivity.this, LongRunningUDPService.class));
                         startService(new Intent(MainActivity.this, LongRunningUDPService.class));
                     } else {
