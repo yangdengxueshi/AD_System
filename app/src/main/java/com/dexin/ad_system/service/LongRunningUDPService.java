@@ -26,7 +26,7 @@ public class LongRunningUDPService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         new Thread(mCDRWifiUDPPayloadQueue).start();           //处理数据报的线程先开启
 
-        //TODO 主线程上不能进行联网操作
+        //TODO 主线程上不能进行联网操作     ( ① 开启接收数据的线程 )
         new Thread(() -> {                                                      //接收数据包的线程后开启
             try {
                 mCDRWifiUDPReceiver.receiveCDRWifiUDPPacket();                  //网络操作必须在子线程中进行

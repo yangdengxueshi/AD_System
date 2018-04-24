@@ -90,7 +90,7 @@ public class CDRUtils {
     }
 
     /**
-     * 解析接收到的原始UDP数据包获得6个TS包（TS包是顺序排放的），我们只需要 0x86 开头的UDP包
+     * 解析接收到的"原始UDP数据包"进而获得"6个TS包"（TS包是顺序排放的），我们只需要 0x86 开头的UDP包(广科院协议)
      *
      * @param udpDataPacket 收到的字节数组：原始的UDP数据报
      * @return "6个TS包的净荷"有序拼接起来的字节数组（长度是1104）
