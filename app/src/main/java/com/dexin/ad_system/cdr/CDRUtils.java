@@ -445,7 +445,7 @@ public class CDRUtils {
                         public void run() {
                             Intent intent = new Intent(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST);                                                                                                               //TODO 删除多媒体文件夹 和 清除分类文件集合 的逻辑
                             intent.putExtra("filePath", file.getName());
-                            AppConfig.mLocalBroadcastManager.sendBroadcast(intent);
+                            AppConfig.getLocalBroadcastManager().sendBroadcast(intent);
                         }
                     }, 500);    //延迟1.5秒发送安卓广播去更新UI
                 }
@@ -487,7 +487,7 @@ public class CDRUtils {
     private static void clearMediaListAndDeleteMediaFolder() {                                                                                                                                      //TODO 删除多媒体文件夹 和 清除分类文件集合 的逻辑
         Intent intent = new Intent(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST);       //1.应该先发送广播请求清空分类文件集合
         intent.putExtra("deleteMediaList", true);
-        AppConfig.mLocalBroadcastManager.sendBroadcast(intent);
+        AppConfig.getLocalBroadcastManager().sendBroadcast(intent);
 
         FileUtils.deleteFilesInDir(Const.FILE_FOLDER);                          //2.再删除本程序多媒体文件夹下的文件     Environment.getExternalStorageDirectory().getPath() + "/AD_System"  ==  /mnt/internal_sd/AD_System
     }

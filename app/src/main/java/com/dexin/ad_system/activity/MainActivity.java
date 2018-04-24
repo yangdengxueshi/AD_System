@@ -39,10 +39,10 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
+import java.lang.ref.WeakReference;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -52,9 +52,6 @@ import butterknife.ButterKnife;
 //TODO IP地址和端口号设置在SP中，当SP发生改变的时候执行onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)方法
 public class MainActivity extends AppCompatActivity {
     private static final int FLAG_HOMEKEY_DISPATCHED = 0x80000000;//HOME键分发标志
-
-    private static final int PLAY_LANTERN_SLIDE_IMAGE = 921;//播放幻灯片图像
-    private static final int HIDE_VIDEO_VIEW = 441;//隐藏VideoView
 
     @BindView(R.id.iv_show)
     ImageView mIvShow;
@@ -84,30 +81,34 @@ public class MainActivity extends AppCompatActivity {
     private MediaPlayer mMediaPlayer = new MediaPlayer();
 
     //TODO 七、自定义Handler
-    private Handler mHandler = new Handler() {
+    private final CustomHandler mCustomHandler = new CustomHandler(MainActivity.this);//声明为final
+
+    /**
+     * 自定义Handler,防止延时消息导致内存泄漏
+     */
+    private static final class CustomHandler extends Handler {
+        private final WeakReference<MainActivity> mCurActivityWeakReference;
+
+        CustomHandler(MainActivity curActivity) {
+            mCurActivityWeakReference = new WeakReference<>(curActivity);
+        }
+
         @Override
         public void handleMessage(Message msg) {
-            switch (msg.what) {
-                case PLAY_LANTERN_SLIDE_IMAGE:
-                    if (imageList.size() > 0) {
-                        Bitmap bitmap = BitmapFactory.decodeFile(imageList.get(currentImageIndex));
-                        mIvShow.setImageBitmap(bitmap);
-                    }
-                    break;
-                case HIDE_VIDEO_VIEW:
-                    if (!mVvVideo.isPlaying()) {             //没有正在播放视频，就将vvVideoView销毁
-                        mVvVideo.setVisibility(View.GONE);
-                    }
-                    break;
+            MainActivity curActivity = mCurActivityWeakReference.get();
+            if (curActivity != null) {// + 判断curActivity的成员变量是否为 null
+                switch (msg.what) {//TODO 执行消息业务逻辑
+                    default:
+                }
             }
         }
-    };
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         RxBarTool.hideStatusBar(this);//隐藏掉状态栏
-        this.getWindow().setFlags(FLAG_HOMEKEY_DISPATCHED, FLAG_HOMEKEY_DISPATCHED);    //设置为主屏幕的关键代码
+        getWindow().setFlags(FLAG_HOMEKEY_DISPATCHED, FLAG_HOMEKEY_DISPATCHED);    //设置为主屏幕的关键代码
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
@@ -134,7 +135,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         //注销工作
         unregisterForContextMenu(mVMenu);
-        AppConfig.mLocalBroadcastManager.unregisterReceiver(mLocalCDRBroadcastReceiver);
+        AppConfig.getLocalBroadcastManager().unregisterReceiver(mLocalCDRBroadcastReceiver);
+        mCustomHandler.removeCallbacksAndMessages(null);
+
 
         //释放WifiLock和MulticastLock
         if (mWifiLock.isHeld()) mWifiLock.release();
@@ -179,29 +182,30 @@ public class MainActivity extends AppCompatActivity {
 */
         //TODO 三、广播
         mLocalCDRBroadcastReceiver = new LocalCDRBroadcastReceiver();
-        AppConfig.mLocalBroadcastManager.registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST));
+        AppConfig.getLocalBroadcastManager().registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST));
 
-        //TODO 五、创建WifiLock和MulticastLock
+        //TODO 五、创建WifiLock和MulticastLock(Wifi锁 和 多播锁)
         WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
-        mWifiLock = Objects.requireNonNull(manager).createWifiLock("UDP_Wifi_Lock");
-        mMulticastLock = manager.createMulticastLock("UDP_Multicast_Lock");
-        //获得WifiLock和MulticastLock
-        mWifiLock.acquire();
-        mMulticastLock.acquire();
+        if (manager != null) {
+            mWifiLock = manager.createWifiLock("UDP_Wifi_Lock");
+            mMulticastLock = manager.createMulticastLock("UDP_Multicast_Lock");
+            //获得WifiLock和MulticastLock
+            mWifiLock.acquire();
+            mMulticastLock.acquire();
+        }
     }
 
     /**
      * 启动广告系统App
      */
     private void launchADSystemApp() {
-        if (AppConfig.getSPUtils().getBoolean("isFirstLaunch", true)) {        //第一次启动App程序
-            setServerIP_Port();                             //设置IP地址和端口号后（再开启服务）
-        } else {                                                //直接开启服务
-            //先创建本程序的媒体文件夹
-            FileUtils.createOrExistsDir(Const.FILE_FOLDER);
+        if (AppConfig.getSPUtils().getBoolean("isFirstLaunch", true)) {//第一次启动App程序
+            setServerIP_Port();//设置IP地址和端口号后（再开启服务）
+        } else {//直接开启服务
+            FileUtils.createOrExistsDir(Const.FILE_FOLDER);//先创建本程序的媒体文件夹 /AD_System
             //先停止、再启动Service
-            stopService(new Intent(MainActivity.this, LongRunningUDPService.class));
-            startService(new Intent(MainActivity.this, LongRunningUDPService.class));
+            stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
+            startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
         }
     }
 
@@ -244,8 +248,8 @@ public class MainActivity extends AppCompatActivity {
                         AppConfig.getSPUtils().put("isFirstLaunch", false);
                         AppConfig.getSPUtils().put("ip", ipStr);
                         AppConfig.getSPUtils().put("port", portValue);             //点击了“确定”才认为APP不再是第一次启动了，并且设置了IP和端口号
-                        stopService(new Intent(MainActivity.this, LongRunningUDPService.class));
-                        startService(new Intent(MainActivity.this, LongRunningUDPService.class));
+                        stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
+                        startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
                     } else {
                         Toast.makeText(CustomApplication.getContext(), "您输入的 IP 或 端口 不符合格式要求。\n请长按屏幕重新设置。", Toast.LENGTH_LONG).show();
                         setServerIP_Port();                     //TODO 弹出对话框请求重新输入
@@ -285,7 +289,12 @@ public class MainActivity extends AppCompatActivity {
                 public void run() {
                     currentImageIndex++;
                     if (currentImageIndex >= imageList.size()) currentImageIndex = 0;
-                    mHandler.sendEmptyMessage(PLAY_LANTERN_SLIDE_IMAGE);
+                    mCustomHandler.post(() -> {
+                        if (imageList.size() > 0) {
+                            Bitmap bitmap = BitmapFactory.decodeFile(imageList.get(currentImageIndex));
+                            mIvShow.setImageBitmap(bitmap);
+                        }
+                    });
                 }
             }, 8000, 8000);
         }
@@ -355,7 +364,11 @@ public class MainActivity extends AppCompatActivity {
             new Timer().schedule(new TimerTask() {
                 @Override
                 public void run() {
-                    mHandler.sendEmptyMessage(HIDE_VIDEO_VIEW);
+                    mCustomHandler.post(() -> {
+                        if (!mVvVideo.isPlaying()) {             //没有正在播放视频，就将vvVideoView销毁
+                            mVvVideo.setVisibility(View.GONE);
+                        }
+                    });
                 }
             }, mVvVideo.getDuration() + 1500, 2000);         //周期性（2秒）地检查是否还在播放视频
         } else {
