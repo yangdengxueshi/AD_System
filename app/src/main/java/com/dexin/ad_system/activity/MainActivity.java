@@ -1,5 +1,6 @@
 package com.dexin.ad_system.activity;
 
+import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -15,6 +16,7 @@ import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.text.method.NumberKeyListener;
 import android.view.ContextMenu;
 import android.view.KeyEvent;
@@ -34,6 +36,7 @@ import com.dexin.ad_system.util.AppConfig;
 import com.dexin.ad_system.util.Const;
 import com.dexin.ad_system.util.CustomApplication;
 import com.vondear.rxtools.RxBarTool;
+import com.vondear.rxtools.view.RxToast;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -48,8 +51,15 @@ import java.util.TimerTask;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
+import permissions.dispatcher.NeedsPermission;
+import permissions.dispatcher.OnNeverAskAgain;
+import permissions.dispatcher.OnPermissionDenied;
+import permissions.dispatcher.OnShowRationale;
+import permissions.dispatcher.PermissionRequest;
+import permissions.dispatcher.RuntimePermissions;
 
 //TODO IP地址和端口号设置在SP中，当SP发生改变的时候执行onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)方法
+@RuntimePermissions
 public class MainActivity extends AppCompatActivity {
     private static final int FLAG_HOMEKEY_DISPATCHED = 0x80000000;//HOME键分发标志
 
@@ -83,27 +93,6 @@ public class MainActivity extends AppCompatActivity {
     //TODO 七、自定义Handler
     private final CustomHandler mCustomHandler = new CustomHandler(MainActivity.this);//声明为final
 
-    /**
-     * 自定义Handler,防止延时消息导致内存泄漏
-     */
-    private static final class CustomHandler extends Handler {
-        private final WeakReference<MainActivity> mCurActivityWeakReference;
-
-        CustomHandler(MainActivity curActivity) {
-            mCurActivityWeakReference = new WeakReference<>(curActivity);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            MainActivity curActivity = mCurActivityWeakReference.get();
-            if (curActivity != null) {// + 判断curActivity的成员变量是否为 null
-                switch (msg.what) {//TODO 执行消息业务逻辑
-                    default:
-                }
-            }
-        }
-    }
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -115,8 +104,7 @@ public class MainActivity extends AppCompatActivity {
         //初始化成员变量
         initMemberVar();
 
-        //执行逻辑
-        launchADSystemApp();
+        MainActivityPermissionsDispatcher.requestSDCardPermissionAndLaunchAppWithPermissionCheck(MainActivity.this);//用"权限分发器"检查程序是否能读写SD卡然后决定是否开启程序
     }
 
     @Override
@@ -154,6 +142,67 @@ public class MainActivity extends AppCompatActivity {
             mVvVideo.suspend();
         }
         super.onDestroy();
+    }
+
+    @NeedsPermission({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
+    void requestSDCardPermissionAndLaunchApp() {//在需要获取权限的地方注释
+        if (AppConfig.getSPUtils().getBoolean("isFirstLaunch", true)) {//第一次启动App程序
+            setServerIP_Port();//设置IP地址和端口号后（再开启服务）
+        } else {//直接开启服务
+            FileUtils.createOrExistsDir(Const.FILE_FOLDER);//先创建本程序的媒体文件夹 "/AD_System"
+            //先停止、再启动Service
+            stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
+            startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
+            RxToast.info("数据接收与解析服务已启动!");
+        }
+    }
+
+    @OnShowRationale({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
+    void showSDCardPermissionRationale(final PermissionRequest request) {//提示用户为何要开启SD卡读写权限
+        new AlertDialog.Builder(MainActivity.this)
+                .setMessage("程序媒体文件操作依赖于对SD卡的读写!")
+                .setPositiveButton("确定", (dialog, which) -> {
+                    request.proceed();//再次执行权限请求
+                })
+                .show();
+    }
+
+    @OnPermissionDenied({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
+    void onSDCardPermissionDenied() {//用户选择了拒绝SD卡权限时的提示
+        RxToast.warning("拒绝程序访问SD卡,程序将无法正常工作\n请到系统权限管理中重新开启!");
+    }
+
+    @OnNeverAskAgain({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
+    void onNeverAskAgainSDCardPermission() {//用户选择不再询问SD卡权限时的提示
+        new AlertDialog.Builder(MainActivity.this).setMessage("拒绝程序访问SD卡,程序将无法正常工作\n请到系统权限管理中重新开启!").setPositiveButton("确定", (dialog, which) -> {
+        }).show();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        MainActivityPermissionsDispatcher.onRequestPermissionsResult(this, requestCode, grantResults);
+    }
+
+    /**
+     * 自定义Handler,防止延时消息导致内存泄漏
+     */
+    private static final class CustomHandler extends Handler {
+        private final WeakReference<MainActivity> mCurActivityWeakReference;
+
+        CustomHandler(MainActivity curActivity) {
+            mCurActivityWeakReference = new WeakReference<>(curActivity);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            MainActivity curActivity = mCurActivityWeakReference.get();
+            if (curActivity != null) {// + 判断curActivity的成员变量是否为 null
+                switch (msg.what) {//TODO 执行消息业务逻辑
+                    default:
+                }
+            }
+        }
     }
 
     @Override
@@ -196,20 +245,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 启动广告系统App
-     */
-    private void launchADSystemApp() {
-        if (AppConfig.getSPUtils().getBoolean("isFirstLaunch", true)) {//第一次启动App程序
-            setServerIP_Port();//设置IP地址和端口号后（再开启服务）
-        } else {//直接开启服务
-            FileUtils.createOrExistsDir(Const.FILE_FOLDER);//先创建本程序的媒体文件夹 /AD_System
-            //先停止、再启动Service
-            stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-            startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-        }
-    }
-
-    /**
      * 设置服务器的“IP”与“端口”
      */
     public void setServerIP_Port() {
@@ -236,12 +271,20 @@ public class MainActivity extends AppCompatActivity {
         } else {
             etPort.setText("");
         }
-        new AlertDialog.Builder(this).setIcon(R.drawable.icon_settings).setTitle("服务器IP与端口配置").setView(tlConfig).setNegativeButton("取消", (dialog, which) -> {
-        })
-                //TODO 此处可执行逻辑处理
-                .setPositiveButton("确定", (dialog, which) -> {
+        new AlertDialog.Builder(this)
+                .setIcon(R.drawable.icon_settings)
+                .setTitle("服务器IP与端口配置")
+                .setView(tlConfig)
+                .setNegativeButton("取消", (dialog, which) -> {
+                })
+                .setPositiveButton("确定", (dialog, which) -> {//TODO 此处可执行逻辑处理
                     String ipStr = etIP.getText().toString();
-                    int portValue = Integer.parseInt(etPort.getText().toString());
+                    String portStr = etPort.getText().toString();
+                    if (TextUtils.isEmpty(portStr)) {
+                        RxToast.error("端口号不能为空!");
+                        return;
+                    }
+                    int portValue = Integer.parseInt(portStr);
 
                     //判断IP输入和端口输入的格式是否正确,如果正确，将其写入SP，如果错误，给出提示。
                     if (RegexUtils.isIP(ipStr) && (0 <= portValue && portValue <= 65535)) {
@@ -250,12 +293,13 @@ public class MainActivity extends AppCompatActivity {
                         AppConfig.getSPUtils().put("port", portValue);             //点击了“确定”才认为APP不再是第一次启动了，并且设置了IP和端口号
                         stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
                         startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
+                        RxToast.info("数据接收与解析服务已启动!");
                     } else {
                         Toast.makeText(CustomApplication.getContext(), "您输入的 IP 或 端口 不符合格式要求。\n请长按屏幕重新设置。", Toast.LENGTH_LONG).show();
-                        setServerIP_Port();                     //TODO 弹出对话框请求重新输入
+                        setServerIP_Port();//TODO 弹出对话框请求重新输入
                     }
                 })
-                .create().show();
+                .show();
     }
 
     @Override
