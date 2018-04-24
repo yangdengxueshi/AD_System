@@ -59,12 +59,10 @@ public class CDRWifiUDPPayloadQueue implements Runnable {
             if (payloadQueue.size() > 500) {
                 LogUtil.d(TAG, "####################################################### 队列上溢 #######################################################");
             } else if (payloadQueue.size() <= 0) {
-                LogUtil.d(TAG, "####################################################### 队列下溢 #######################################################");
+//                LogUtil.d(TAG, "####################################################### 队列下溢 #######################################################");
             }
 
-            if (payloadQueue.size() > 0) {
-                payloadArray = payloadQueue.poll();
-            }
+            if (payloadQueue.size() > 0) payloadArray = payloadQueue.poll();
         }
         return payloadArray;
     }

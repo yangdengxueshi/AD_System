@@ -50,6 +50,13 @@ dependencies {
 //    implementation 'android.lib.verticalmarqueetextview:VerticalMarqueeTextView:1.0.2'
     implementation 'com.github.pinguo-zhouwei:MZBannerView:v2.0.0'
 
-    implementation 'com.jakewharton:butterknife:8.4.0'
-    annotationProcessor 'com.jakewharton:butterknife-compiler:8.4.0'
+    implementation "com.jakewharton:butterknife:$butterknife_version"
+    annotationProcessor "com.jakewharton:butterknife-compiler:$butterknife_version"
+
+    implementation "com.github.hotchemi:permissionsdispatcher:$permissionsdispatcher_version"
+    annotationProcessor "com.github.hotchemi:permissionsdispatcher-processor:$permissionsdispatcher_version"
+
+    debugImplementation "com.squareup.leakcanary:leakcanary-android:$leakcanary_version"
+    releaseImplementation "com.squareup.leakcanary:leakcanary-android-no-op:$leakcanary_version"
+    testImplementation "com.squareup.leakcanary:leakcanary-android-no-op:$leakcanary_version"
 }
