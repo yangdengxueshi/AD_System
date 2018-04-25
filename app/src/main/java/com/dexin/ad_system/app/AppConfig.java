@@ -30,7 +30,7 @@ public final class AppConfig {
     public static final String FORM_FEED_CHARACTER = "\n\n\n\n\n";
     public static final String LOAD_FILE_OR_DELETE_MEDIA_LIST = "com.dexin.ad_system.LOAD_FILE_OR_DELETE_MEDIA_LIST";
     public static final String FILE_FOLDER = Environment.getExternalStorageDirectory().getPath() + "/AD_System";        //多媒体文件夹：/mnt/internal_sd/AD_System
-    public static byte[] head_008888_array = new byte[]{(byte) 0x00, (byte) 0x88, (byte) 0x88};                         //自定义协议头0x 008888 头
+    public static byte[] sHead008888Array = {(byte) 0x00, (byte) 0x88, (byte) 0x88};                         //自定义协议头0x 008888 头
 
 
     private static final class LocalBroadcastManagerHolder {
@@ -44,7 +44,7 @@ public final class AppConfig {
      */
     @Contract(pure = true)
     public static LocalBroadcastManager getLocalBroadcastManager() {
-        return LocalBroadcastManagerHolder.LOCAL_BROADCAST_MANAGER;
+        return AppConfig.LocalBroadcastManagerHolder.LOCAL_BROADCAST_MANAGER;
     }
 
 
@@ -59,6 +59,6 @@ public final class AppConfig {
      */
     @Contract(pure = true)
     public static SPUtils getSPUtils() {
-        return SPUtilsHolder.SP_UTILS;
+        return AppConfig.SPUtilsHolder.SP_UTILS;
     }
 }

@@ -14,16 +14,18 @@ import com.dexin.ad_system.cdr.CDRUtils;
 import com.dexin.ad_system.util.LogUtil;
 import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
+import com.orhanobut.logger.Logger;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 
 public class LongRunningUDPService extends Service {
-    private ArrayBlockingQueue<byte[]> mPayloadArrayBlockingQueue = new ArrayBlockingQueue<>(500);//存放"(0~6)*184净荷"的阻塞队列
+    private static final ArrayBlockingQueue<byte[]> mPayloadArrayBlockingQueue = new ArrayBlockingQueue<>(500);//存放"(0~6)*184净荷"的阻塞队列
     private PayloadProducerThread mPayloadProducerThread;
     private PayloadConsumerThread mPayloadConsumerThread;
 
@@ -35,7 +37,7 @@ public class LongRunningUDPService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        startForeground(1, new NotificationCompat.Builder(CustomApplication.getContext(), "ForgroundService")
+        startForeground(1, new NotificationCompat.Builder(CustomApplication.getContext(), "ForegroundService")
                 .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher))
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle("CDR广告系统")
@@ -73,7 +75,7 @@ public class LongRunningUDPService extends Service {
      * ------------------------------------------------------------------------------TODO 净荷"生产者"线程----------------------------------------------------------------------------------------
      * ------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------------------
      */
-    private class PayloadProducerThread extends Thread {
+    private static class PayloadProducerThread extends Thread {
         private static final String TAG = "TAG_PayloadProducerThread";
         private volatile boolean isNeedReceiveUDP;       //是否需要接收UDP数据包（没有启动的时候不需要接收）
         private byte[] mUdpDataContainer;
@@ -106,11 +108,11 @@ public class LongRunningUDPService extends Service {
                             }
                         }
                     } catch (IOException | InterruptedException e) {
-                        e.printStackTrace();
+                        Logger.t(TAG).e(e, "run: ");
                     }
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                Logger.t(TAG).e(e, "run: ");
             } finally {
                 if (mDatagramSocket != null) {
                     if (mDatagramSocket.isConnected()) mDatagramSocket.disconnect();
@@ -140,7 +142,7 @@ public class LongRunningUDPService extends Service {
          * @return "6个TS包的净荷"有序拼接起来的字节数组（长度是 6 * 184 = 1104）
          */
         @Nullable
-        private byte[] parseUDPPacketToPayload(byte[] udpDataPacket) {
+        private static byte[] parseUDPPacketToPayload(byte[] udpDataPacket) {
 //        if (udpDataPacket == null || udpDataPacket.length < (AppConfig.UDP_PACKET_HEADER_SIZE + AppConfig.UDP_PACKET_TAIL_SIZE)) {
 //            LogUtil.d(TAG, "UDP原始数据包为 null 或 长度小于 21+311,数据不符合要求进而被丢弃!");
 //            return null;
@@ -148,7 +150,7 @@ public class LongRunningUDPService extends Service {
 //            LogUtil.i(TAG, "UDP原始数据包长不是1460,原始数据有问题!");
 //        }
             {//①原始UDP数据正确性检验
-                if (udpDataPacket == null || udpDataPacket.length != AppConfig.UDP_PACKET_SIZE) {
+                if ((udpDataPacket == null) || (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE)) {
                     LogUtil.e(TAG, "UDP原始数据包为 null 或 长度不是1460,数据不符合要求进而被丢弃!");
                     return null;
                 }
@@ -184,12 +186,11 @@ public class LongRunningUDPService extends Service {
      * ------------------------------------------------------------------------------------TODO 净荷"消费者"线程----------------------------------------------------------------------------------
      * ------------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------------
      */
-    private class PayloadConsumerThread extends Thread {
+    private static class PayloadConsumerThread extends Thread {
         private static final String TAG = "TAG_PayloadConsumerThread";
         private volatile boolean isNeedParsePayloadData;
         private int mHead008888Index;//记录"自定义协议头 008888"的下标
         private byte[] mCurrentPayloadArray;
-        private byte[] mNextPayloadArray;
 
         @Override
         public void run() {
@@ -197,13 +198,11 @@ public class LongRunningUDPService extends Service {
             isNeedParsePayloadData = true;
             mCurrentPayloadArray = getNextValidPayload();//一开始从"净荷阻塞队列"中取出一个净荷作为"当前净荷"
             while (isNeedParsePayloadData) {
-                mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.head_008888_array);        //TODO 一、在当前净荷数组中寻找 00 88 88 的下标                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
+                mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);        //TODO 一、在当前净荷数组中寻找 00 88 88 的下标                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
                 while (mHead008888Index < 0) {//TODO （完全可能还是找不到，因为有大量的填充数据“0000000000000000” 和 “FFFFFFFFFFFFFFF”）,所以需要一直向后拼接寻找 008888 ，直到找到（mHead008888Index>=0）为止
-                    mNextPayloadArray = getNextValidPayload();           //再次到队列中找下一个净荷包     TODO 长度不一定是1104，因为6个ts包中的某个包可能不符合要求
-                    mCurrentPayloadArray = joint(mCurrentPayloadArray, mNextPayloadArray, 2);      //TODO 基于上面的原因，长度也不一定是1106
-                    mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.head_008888_array);                                                                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
-                }//TODO 经历了循环之后，一定可以找到 008888 ，找到了退出循环的时候 mHead008888Index >= 0 一定成立
-                //程序运行到此处一定可以在 mCurrentPayloadArray 中找到 008888
+                    mCurrentPayloadArray = jointBuffer(mCurrentPayloadArray, getNextValidPayload(), 2);      //TODO 基于上面的原因，长度也不一定是1106
+                    mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);                                                                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
+                }//TODO 经历了循环之后，一定可以在 mCurrentPayloadArray 中找到 008888 ,找到了退出循环的时候 mHead008888Index >= 0 一定成立
                 byte[] payloadAfterHead_008888 = new byte[mCurrentPayloadArray.length - mHead008888Index];      //TODO 注意：payloadAfterHead 的长度有可能刚好能容下 00 88 88
                 System.arraycopy(mCurrentPayloadArray, mHead008888Index, payloadAfterHead_008888, 0, payloadAfterHead_008888.length);
                 mCurrentPayloadArray = parsePayloadArrayAfterHead008888(payloadAfterHead_008888);        //TODO 传递的是以“008888”头为起始的数组，返回的是“超出部分的净荷内容”来作为“当前的净荷内容”去继续查找拼接
@@ -219,15 +218,15 @@ public class LongRunningUDPService extends Service {
         }
 
         /**
-         * 获取下一个有效的净荷
+         * 获取下一个有效的净荷   TODO 长度不一定是1104，因为6个ts包中的某个包可能不符合要求
          *
          * @return 下一个有效的净荷
          */
-        private byte[] getNextValidPayload() {
+        private static byte[] getNextValidPayload() {
             try {
                 return mPayloadArrayBlockingQueue.take();//FIXME 遇到队列中没有元素的时候,线程会阻塞
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                Logger.t(TAG).e(e, "getNextValidPayload: ");
                 return new byte[0];//上一个return语句会阻塞,不会走到这一步!
             }
         }
@@ -242,19 +241,19 @@ public class LongRunningUDPService extends Service {
          * @param subBuffer  子数组subBuffer
          * @return 找到的起始索引（为-1表示没有找到）
          */
-        private int indexOfSubBuffer(int start, int end, byte[] mainBuffer, byte[] subBuffer) {//end 一般传递的是 mainBuffer.length
+        private static int indexOfSubBuffer(int start, int end, byte[] mainBuffer, byte[] subBuffer) {//end 一般传递的是 mainBuffer.length
             int failure = -1;
-            if (subBuffer == null || mainBuffer == null || subBuffer.length > mainBuffer.length) return failure;//正常
+            if ((subBuffer == null) || (mainBuffer == null) || (subBuffer.length > mainBuffer.length)) return failure;//正常
             if (start < 0) start = 0;
             if (start >= Math.min(end, mainBuffer.length)) {//
-                LogUtil.e(TAG, "start查找位置超出 Math.min(end, mainBuffer.length)!" + start + ":" + end + ":" + mainBuffer.length);
+                LogUtil.e(TAG, MessageFormat.format("start查找位置超出 Math.min(end, mainBuffer.length)!{0}:{1}:{2}", start, end, mainBuffer.length));
                 return failure;
             }
             if (end > mainBuffer.length) end = mainBuffer.length;
 
             boolean isFound;//子数组被找到
             for (int i = start; i < end; i++) {
-                if (i <= end - subBuffer.length) {
+                if (i <= (end - subBuffer.length)) {
                     isFound = true;
                     for (int j = 0; j < subBuffer.length; j++) {
                         if (mainBuffer[i + j] != subBuffer[j]) {
@@ -289,9 +288,8 @@ public class LongRunningUDPService extends Service {
                     //TODO 超出的长度不能丢，要保存起来
                     overRangePayloadArray = cutOverRangePayloadArray(currentPayloadArray);
                     break;
-                } else if (currentPayloadArray.length < 1024) {//TODO 有可能 currentPayloadArray 刚好能容下 00 88 88
-                    byte[] nextPayloadArray = getNextValidPayload();    //TODO 长度也不一定是1104(完全有可能小于 1024)    184*n n∈{1,2,3,4,5,6}
-                    currentPayloadArray = joint(currentPayloadArray, nextPayloadArray, currentPayloadArray.length);//TODO 取出包括 00 88 88 之后的所有内容，与下一段数据 进行拼接 ,截取前1024        (拼接之后必须检查前 1024 是否还有一个 008888)
+                } else {//TODO 有可能 currentPayloadArray 刚好能容下 00 88 88
+                    currentPayloadArray = jointBuffer(currentPayloadArray, getNextValidPayload(), currentPayloadArray.length);//TODO 取出包括 00 88 88 之后的所有内容，与下一段数据 进行拼接 ,截取前1024        (拼接之后必须检查前 1024 是否还有一个 008888)
                 }
             }
             //开始解析数据
@@ -340,18 +338,11 @@ public class LongRunningUDPService extends Service {
          * @param currentBackOffset currentBuffer 倒数个数
          * @return 拼接后的结果数组
          */
-        private byte[] joint(byte[] currentBuffer, byte[] nextBuffer, int currentBackOffset) {
-            if (currentBackOffset < 0) {
-                currentBackOffset = 0;
-                if ((nextBuffer != null) && (nextBuffer.length >= 0)) {
-                    return nextBuffer;
-                }
-            }
-
+        private static byte[] jointBuffer(byte[] currentBuffer, byte[] nextBuffer, int currentBackOffset) {
             byte[] sumBuffer = new byte[0];
-
+            if (currentBackOffset < 0) return (nextBuffer != null) ? nextBuffer : sumBuffer;
             if (((currentBuffer == null) || (currentBuffer.length == 0)) && ((nextBuffer == null) || (nextBuffer.length == 0))) {
-                return new byte[0];
+                return sumBuffer;
             } else if (((currentBuffer == null) || (currentBuffer.length == 0)) && ((nextBuffer != null) && (nextBuffer.length >= 0))) {
                 return nextBuffer;
             } else if (((currentBuffer != null) && (currentBuffer.length >= 0)) && ((nextBuffer == null) || (nextBuffer.length == 0))) {

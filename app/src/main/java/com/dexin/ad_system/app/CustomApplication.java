@@ -5,6 +5,8 @@ import android.app.Application;
 import android.content.Context;
 
 import com.blankj.utilcode.util.Utils;
+import com.orhanobut.logger.AndroidLogAdapter;
+import com.orhanobut.logger.Logger;
 import com.squareup.leakcanary.LeakCanary;
 import com.vondear.rxtools.RxTool;
 
@@ -31,6 +33,7 @@ public class CustomApplication extends Application {
         super.onCreate();
         if (Objects.equals(getCurrentProcessName(), "com.dexin.ad_system") && !LeakCanary.isInAnalyzerProcess(this)) {//如果不在分析器进程中:此进程专注于LeakCanary堆分析,你不应该在此进程中初始化App
             LeakCanary.install(this);
+            Logger.addLogAdapter(new AndroidLogAdapter());
             RxTool.init(this);
             Utils.init(this);
             context = getApplicationContext();
