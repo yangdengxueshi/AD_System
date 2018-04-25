@@ -6,8 +6,7 @@ import java.util.concurrent.ArrayBlockingQueue;
  * 生产者-消费者 测试
  */
 public class Test {
-    private int queueSize = 10;
-    private ArrayBlockingQueue<Integer> queue = new ArrayBlockingQueue<>(queueSize);
+    private ArrayBlockingQueue<Integer> queue = new ArrayBlockingQueue<>(10);
 
     public static void main(String[] args) {
         Test test = new Test();

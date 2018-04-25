@@ -5,8 +5,7 @@ import android.support.v4.util.LongSparseArray;
 import android.util.Log;
 
 import com.blankj.utilcode.util.FileUtils;
-import com.dexin.ad_system.util.AppConfig;
-import com.dexin.ad_system.util.Const;
+import com.dexin.ad_system.app.AppConfig;
 import com.dexin.ad_system.util.LogUtil;
 import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
@@ -375,7 +374,7 @@ public class CDRUtils {
         }
         String extention = elementFormat[element_format];
         //TODO 创建 当前文件
-        File file = new File(Const.FILE_FOLDER, element_guid + extention);
+        File file = new File(AppConfig.FILE_FOLDER, element_guid + extention);
         FileUtils.createOrExistsFile(file);
 
         RandomAccessFile randomAccessFile;
@@ -394,7 +393,7 @@ public class CDRUtils {
                     mTimer.schedule(new TimerTask() {
                         @Override
                         public void run() {
-                            Intent intent = new Intent(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST);                                                                                                               //TODO 删除多媒体文件夹 和 清除分类文件集合 的逻辑
+                            Intent intent = new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST);                                                                                                               //TODO 删除多媒体文件夹 和 清除分类文件集合 的逻辑
                             intent.putExtra("filePath", file.getName());
                             AppConfig.getLocalBroadcastManager().sendBroadcast(intent);
                         }
@@ -436,10 +435,10 @@ public class CDRUtils {
      * 删除存放本程序多媒体文件的文件夹 并 发送广播清空分类多媒体集合
      */
     private static void clearMediaListAndDeleteMediaFolder() {                                                                                                                                      //TODO 删除多媒体文件夹 和 清除分类文件集合 的逻辑
-        Intent intent = new Intent(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST);       //1.应该先发送广播请求清空分类文件集合
+        Intent intent = new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST);       //1.应该先发送广播请求清空分类文件集合
         intent.putExtra("deleteMediaList", true);
         AppConfig.getLocalBroadcastManager().sendBroadcast(intent);
 
-        FileUtils.deleteFilesInDir(Const.FILE_FOLDER);                          //2.再删除本程序多媒体文件夹下的文件     Environment.getExternalStorageDirectory().getPath() + "/AD_System"  ==  /mnt/internal_sd/AD_System
+        FileUtils.deleteFilesInDir(AppConfig.FILE_FOLDER);                          //2.再删除本程序多媒体文件夹下的文件     Environment.getExternalStorageDirectory().getPath() + "/AD_System"  ==  /mnt/internal_sd/AD_System
     }
 }

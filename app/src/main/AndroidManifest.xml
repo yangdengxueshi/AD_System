@@ -36,7 +36,7 @@
         android:protectionLevel="normal"/>
 
     <application
-        android:name=".util.CustomApplication"
+        android:name=".app.CustomApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"

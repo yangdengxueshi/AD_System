@@ -31,10 +31,9 @@ import android.widget.VideoView;
 import com.blankj.utilcode.util.FileUtils;
 import com.blankj.utilcode.util.RegexUtils;
 import com.dexin.ad_system.R;
+import com.dexin.ad_system.app.AppConfig;
+import com.dexin.ad_system.app.CustomApplication;
 import com.dexin.ad_system.service.LongRunningUDPService;
-import com.dexin.ad_system.util.AppConfig;
-import com.dexin.ad_system.util.Const;
-import com.dexin.ad_system.util.CustomApplication;
 import com.vondear.rxtools.RxBarTool;
 import com.vondear.rxtools.view.RxToast;
 
@@ -149,7 +148,7 @@ public class MainActivity extends AppCompatActivity {
         if (AppConfig.getSPUtils().getBoolean("isFirstLaunch", true)) {//第一次启动App程序
             setServerIP_Port();//设置IP地址和端口号后（再开启服务）
         } else {//直接开启服务
-            FileUtils.createOrExistsDir(Const.FILE_FOLDER);//先创建本程序的媒体文件夹 "/AD_System"
+            FileUtils.createOrExistsDir(AppConfig.FILE_FOLDER);//先创建本程序的媒体文件夹 "/AD_System"
             //先停止、再启动Service
             stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
             startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
@@ -231,7 +230,7 @@ public class MainActivity extends AppCompatActivity {
 */
         //TODO 三、广播
         mLocalCDRBroadcastReceiver = new LocalCDRBroadcastReceiver();
-        AppConfig.getLocalBroadcastManager().registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(Const.LOAD_FILE_OR_DELETE_MEDIA_LIST));
+        AppConfig.getLocalBroadcastManager().registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST));
 
         //TODO 五、创建WifiLock和MulticastLock(Wifi锁 和 多播锁)
         WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
@@ -361,7 +360,7 @@ public class MainActivity extends AppCompatActivity {
                         content.append(line);
                     }
                     if (i != txtFilePathList.size() - 1) {
-                        content.append(Const.FORM_FEED_CHARACTER + Const.LINE_HEAD);
+                        content.append(AppConfig.FORM_FEED_CHARACTER + AppConfig.LINE_HEAD);
                     }
                     bufferedReader.close();
                 }
@@ -439,7 +438,7 @@ public class MainActivity extends AppCompatActivity {
 
                 mMediaPlayer.reset();
             } else {                                //否则    传递的是文件路径，在这里获取文件路径
-                filePath = Const.FILE_FOLDER + "/" + intent.getStringExtra("filePath");
+                filePath = AppConfig.FILE_FOLDER + "/" + intent.getStringExtra("filePath");
             }
 
             if (filePath.endsWith(".png") || filePath.endsWith(".bmp") || filePath.endsWith(".jpg") || filePath.endsWith(".gif")) {     //1.显示图片
@@ -458,8 +457,8 @@ public class MainActivity extends AppCompatActivity {
             } else if (filePath.endsWith(".txt")) {
                 //2.显示文字
                 txtList.add(filePath);
-//                vmtvDetail.setText(Const.LINE_HEAD + loadText(txtList));
-                mTvDetail.setText(MessageFormat.format("{0}{1}", Const.LINE_HEAD, loadText(txtList)));
+//                vmtvDetail.setText(AppConfig.LINE_HEAD + loadText(txtList));
+                mTvDetail.setText(MessageFormat.format("{0}{1}", AppConfig.LINE_HEAD, loadText(txtList)));
 
                 Toast.makeText(CustomApplication.getContext(), "收到    文字", Toast.LENGTH_LONG).show();
             } else if (filePath.endsWith(".mp3") || filePath.endsWith(".wav")) {                                                        //4.播放音乐

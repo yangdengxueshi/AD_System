@@ -1,4 +1,4 @@
-package com.dexin.ad_system.util;
+package com.dexin.ad_system.app;
 
 import android.app.ActivityManager;
 import android.app.Application;
