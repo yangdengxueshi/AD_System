@@ -54,14 +54,8 @@ public class CDRWifiUDPPayloadQueue implements Runnable {
      * @return 队列中第一个净荷包（期望长度是184*n n∈{0,1,2,3,4,5,6}）
      */
     private static byte[] getNextPayload() {
-        byte[] payloadArray = new byte[0];
+        byte[] payloadArray = null;
         synchronized (payloadQueue) {
-            if (payloadQueue.size() > 500) {
-                LogUtil.d(TAG, "####################################################### 队列上溢 #######################################################");
-            } else if (payloadQueue.size() <= 0) {
-//                LogUtil.d(TAG, "####################################################### 队列下溢 #######################################################");
-            }
-
             if (payloadQueue.size() > 0) payloadArray = payloadQueue.poll();
         }
         return payloadArray;
