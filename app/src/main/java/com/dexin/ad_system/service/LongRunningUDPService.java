@@ -15,6 +15,7 @@ import com.dexin.ad_system.util.LogUtil;
 import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
 
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -68,18 +69,20 @@ public class LongRunningUDPService extends Service {
     }
 
     /**
-     * 净荷"生产者"线程
+     * -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------TODO 净荷"生产者"线程----------------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------------------
      */
     private class PayloadProducerThread extends Thread {
         private static final String TAG = "TAG_PayloadProducerThread";
+        private volatile boolean isNeedReceiveUDP;       //是否需要接收UDP数据包（没有启动的时候不需要接收）
         private byte[] mUdpDataContainer;
         private DatagramSocket mDatagramSocket;          //单播套接字
         private DatagramPacket mDatagramPacket;
-        private boolean isNeedReceiveUDP = false;       //是否需要接收UDP数据包（没有启动的时候不需要接收）
 
         @Override
         public void run() {
-            LogUtil.d(TAG, "################################################ 开始接收CDR_Wifi_UDP 数据包 ################################################");
+            LogUtil.e(TAG, "################################################ 开始接收CDR_Wifi_UDP 数据包 ################################################");
             try {
                 isNeedReceiveUDP = true;//标志"重新开始接受CDR_Wifi_UDP 数据包"
                 if (mUdpDataContainer == null) mUdpDataContainer = new byte[AppConfig.UDP_PACKET_SIZE];//1460包长
@@ -90,16 +93,20 @@ public class LongRunningUDPService extends Service {
                 }
                 if (mDatagramPacket == null) mDatagramPacket = new DatagramPacket(mUdpDataContainer, mUdpDataContainer.length);//建立一个指定缓冲区大小的数据包
                 while (isNeedReceiveUDP) {
-//                mDatagramSocket.setSoTimeout(8000);
-                    mDatagramSocket.receive(mDatagramPacket);//将单播套接字收到的UDP数据包存放于datagramPacket中(会阻塞)
-                    mUdpDataContainer = mDatagramPacket.getData();//UDP数据包
-//                LogUtil.d(TAG, "UDP原始数据包AAAAAAAAAAAAAAAAAAAAA：" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
-                    if ((mUdpDataContainer != null) && (mUdpDataContainer.length > 0)) {
-                        mUdpDataContainer = parseUDPPacketToPayload(mUdpDataContainer);//解析UDP数据包后获得UDP净荷
-//                    LogUtil.d(TAG, "ts净荷包AAAAAAAAAAAAAAAAAAAAA：" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
+                    try {
+//                        mDatagramSocket.setSoTimeout(8000);
+                        mDatagramSocket.receive(mDatagramPacket);//将单播套接字收到的UDP数据包存放于datagramPacket中(会阻塞)
+                        mUdpDataContainer = mDatagramPacket.getData();//UDP数据包
+//                        LogUtil.d(TAG, "UDP原始数据包AAAAAAAAAAAAAAAAAAAAA：" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
                         if ((mUdpDataContainer != null) && (mUdpDataContainer.length > 0)) {
-                            mPayloadArrayBlockingQueue.put(mUdpDataContainer);//TODO 这里为了方便后面的解析工作，传入的是UDP净荷；可能引起掉包，再接收一轮
+                            mUdpDataContainer = parseUDPPacketToPayload(mUdpDataContainer);//解析UDP数据包后获得UDP净荷
+//                            LogUtil.d(TAG, "ts净荷包AAAAAAAAAAAAAAAAAAAAA：" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
+                            if ((mUdpDataContainer != null) && (mUdpDataContainer.length > 0)) {
+                                mPayloadArrayBlockingQueue.put(mUdpDataContainer);//TODO 这里为了方便后面的解析工作，传入的是UDP净荷；可能引起掉包，再接收一轮
+                            }
                         }
+                    } catch (IOException | InterruptedException e) {
+                        e.printStackTrace();
                     }
                 }
             } catch (Exception e) {
@@ -123,7 +130,7 @@ public class LongRunningUDPService extends Service {
 
         private void stopReceiveUDPPacket() {
             isNeedReceiveUDP = false;
-            LogUtil.d(TAG, "##################################### CDRWifiReceive 服务关闭，结束接收CDR_Wifi_UDP 数据包 #######################################");
+            LogUtil.e(TAG, "##################################### CDRWifiReceive 服务关闭，结束接收CDR_Wifi_UDP 数据包 #######################################");
         }
 
         /**
@@ -173,33 +180,33 @@ public class LongRunningUDPService extends Service {
     }
 
     /**
-     * 净荷"消费者"线程
+     * -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------------TODO 净荷"消费者"线程----------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------------
      */
     private class PayloadConsumerThread extends Thread {
         private static final String TAG = "TAG_PayloadConsumerThread";
-        private boolean isParsingPayloadData = false;
+        private volatile boolean isNeedParsePayloadData;
+        private int mHead008888Index;//记录"自定义协议头 008888"的下标
+        private byte[] mCurrentPayloadArray;
+        private byte[] mNextPayloadArray;
 
         @Override
         public void run() {
-            isParsingPayloadData = true;
-            int head_008888_index;
-            byte[] currentPayloadArray = getNextValidPayload();     //一开始先从队列中取出一个 有效净荷包 作为当前净荷
-            byte[] nextPayloadArray;
-
-            while (isParsingPayloadData) {
-                head_008888_index = CDRUtils.indexOf(0, currentPayloadArray.length, currentPayloadArray, AppConfig.head_008888_array);        //TODO 一、在当前净荷数组中寻找 00 88 88 的下标                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
-
-                while (head_008888_index < 0) {//TODO （完全可能还是找不到，因为有大量的填充数据“0000000000000000” 和 “FFFFFFFFFFFFFFF”）,所以需要一直向后拼接寻找 008888 ，直到找到（head_008888_index>=0）为止
-                    nextPayloadArray = getNextValidPayload();           //再次到队列中找下一个净荷包     TODO 长度不一定是1104，因为6个ts包中的某个包可能不符合要求
-                    currentPayloadArray = joint(currentPayloadArray, nextPayloadArray, 2);      //TODO 基于上面的原因，长度也不一定是1106
-                    head_008888_index = CDRUtils.indexOf(0, currentPayloadArray.length, currentPayloadArray, AppConfig.head_008888_array);                                                                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
-                }//TODO 经历了循环之后，一定可以找到 008888 ，找到了退出循环的时候 head_008888_index >= 0 一定成立
-
-                //程序运行到此处一定可以在 currentPayloadArray 中找到 008888
-                byte[] payloadAfterHead_008888 = new byte[currentPayloadArray.length - head_008888_index];      //TODO 注意：payloadAfterHead 的长度有可能刚好能容下 00 88 88
-                System.arraycopy(currentPayloadArray, head_008888_index, payloadAfterHead_008888, 0, payloadAfterHead_008888.length);
-
-                currentPayloadArray = parsePayloadArrayAfterHead008888(payloadAfterHead_008888);        //TODO 传递的是以“008888”头为起始的数组，返回的是“超出部分的净荷内容”来作为“当前的净荷内容”去继续查找拼接
+            LogUtil.e(TAG, "################################################ 开始解析净荷数据 ################################################");
+            isNeedParsePayloadData = true;
+            mCurrentPayloadArray = getNextValidPayload();//一开始从"净荷阻塞队列"中取出一个净荷作为"当前净荷"
+            while (isNeedParsePayloadData) {
+                mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.head_008888_array);        //TODO 一、在当前净荷数组中寻找 00 88 88 的下标                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
+                while (mHead008888Index < 0) {//TODO （完全可能还是找不到，因为有大量的填充数据“0000000000000000” 和 “FFFFFFFFFFFFFFF”）,所以需要一直向后拼接寻找 008888 ，直到找到（mHead008888Index>=0）为止
+                    mNextPayloadArray = getNextValidPayload();           //再次到队列中找下一个净荷包     TODO 长度不一定是1104，因为6个ts包中的某个包可能不符合要求
+                    mCurrentPayloadArray = joint(mCurrentPayloadArray, mNextPayloadArray, 2);      //TODO 基于上面的原因，长度也不一定是1106
+                    mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.head_008888_array);                                                                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
+                }//TODO 经历了循环之后，一定可以找到 008888 ，找到了退出循环的时候 mHead008888Index >= 0 一定成立
+                //程序运行到此处一定可以在 mCurrentPayloadArray 中找到 008888
+                byte[] payloadAfterHead_008888 = new byte[mCurrentPayloadArray.length - mHead008888Index];      //TODO 注意：payloadAfterHead 的长度有可能刚好能容下 00 88 88
+                System.arraycopy(mCurrentPayloadArray, mHead008888Index, payloadAfterHead_008888, 0, payloadAfterHead_008888.length);
+                mCurrentPayloadArray = parsePayloadArrayAfterHead008888(payloadAfterHead_008888);        //TODO 传递的是以“008888”头为起始的数组，返回的是“超出部分的净荷内容”来作为“当前的净荷内容”去继续查找拼接
             }
         }
 
@@ -207,42 +214,65 @@ public class LongRunningUDPService extends Service {
          * 停止解析净荷数据
          */
         private void stopParsePayloadData() {
-            isParsingPayloadData = false;
-            LogUtil.d(TAG, "################################################停止解析净荷数据################################################");
+            isNeedParsePayloadData = false;
+            LogUtil.e(TAG, "################################################ 停止解析净荷数据 ################################################");
         }
 
         /**
-         * 读取第一个净荷包，并将其从原来的净荷队列中移除
-         *
-         * @return 队列中第一个净荷包（期望长度是184*n n∈{0,1,2,3,4,5,6}）
-         */
-        private byte[] getNextPayload() {
-            try {
-                return mPayloadArrayBlockingQueue.take();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            return null;
-        }
-
-        /**
-         * 获取下一个有效的净荷   TODO 这个方法非常关键，能够保证：从队列中取出的数据是有效数据(循环+线程休眠的意义也是很巧妙：一是保证取出的数据是一定有效的，二是保证第一次取数据一定取得到)
+         * 获取下一个有效的净荷
          *
          * @return 下一个有效的净荷
          */
         private byte[] getNextValidPayload() {
-            byte[] nextPayloadArray = getNextPayload();
-            // 数据池下溢就会出现取出东西为空，那我就一直取，直到取出的非空
-            while (nextPayloadArray == null || nextPayloadArray.length == 0) {                         //如果下一个净荷数据包是“空”（净荷队列中没有东西了），则睡0.1秒
-                try {
-                    Thread.sleep(100);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                nextPayloadArray = getNextPayload();       //再取一次净荷数据包，看看能否取到
+            try {
+                return mPayloadArrayBlockingQueue.take();//FIXME 遇到队列中没有元素的时候,线程会阻塞
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                return new byte[0];//上一个return语句会阻塞,不会走到这一步!
             }
-//        LogUtil.d(TAG, "队列中有效的净荷包AAAAAAAAAAAAAAAAAAAAA：" + stringhelpers.bytesToHexString(nextPayloadArray).toUpperCase());
-            return nextPayloadArray;
+        }
+
+        /**
+         * 找出子数组subBuffer在主数组mainBuffer中的起始索引
+         * TODO 本方法进行了深度验证，没有问题
+         *
+         * @param start      开始查找的位置
+         * @param end        结束查找的位置
+         * @param mainBuffer 主数组mainBuffer
+         * @param subBuffer  子数组subBuffer
+         * @return 找到的起始索引（为-1表示没有找到）
+         */
+        private int indexOfSubBuffer(int start, int end, byte[] mainBuffer, byte[] subBuffer) {//end 一般传递的是 mainBuffer.length
+            if (start < 0) start = 0;
+            if (start > mainBuffer.length) {
+                LogUtil.d(TAG, "start位置超出主数组长度！");
+                return -1;
+            }
+            if (end < start) {
+                LogUtil.d(TAG, "主数组中查找的开始位置大于结束位置！");
+                return -1;
+            }
+            if (end > mainBuffer.length) end = mainBuffer.length;
+            if (mainBuffer.length < subBuffer.length) return -1;//正常
+
+            boolean isFound;//子数组被找到
+            for (int i = start; i < end; i++) {
+                if (i <= end - subBuffer.length) {
+                    isFound = true;
+                    for (int j = 0; j < subBuffer.length; j++) {
+                        if (subBuffer[j] != mainBuffer[i + j]) {
+                            isFound = false;
+                            break;
+                        }
+                    }
+                } else {
+                    isFound = false;
+                }
+                if (isFound) {
+                    return i;
+                }
+            }
+            return -1;
         }
 
         /**

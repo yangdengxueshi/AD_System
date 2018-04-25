@@ -22,7 +22,7 @@ import java.util.TimerTask;
  * CDR 工具
  */
 public class CDRUtils {
-    private static final String TAG = "CDRUtils";
+    private static final String TAG = "TAG_CDRUtils";
     private static int configTableVersionNumber = -1;                           //配置表 的 版本号
     //文件数据模型（guid）
     private static List<Long> guidList = new ArrayList<>();                     //配置表：“元素guid数组”
@@ -31,59 +31,6 @@ public class CDRUtils {
     private static Timer mTimer = new Timer();
     //本地广播
     private static String[] elementFormat = new String[]{".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};      //.3gp  .wav    .mkv    .mov    .mpeg   .flv
-
-    /**
-     * 找出子数组subBuffer在主数组buffer中的起始位置 TODO 本方法进行了深度验证，没有问题
-     *
-     * @param start      开始查找的位置
-     * @param end        结束查找的位置
-     * @param mainBuffer 主数组mainBuffer
-     * @param subBuffer  子数组subBuffer
-     * @return 找到的下标（为-1表示没有找到）
-     */
-    public static int indexOf(int start, int end, byte[] mainBuffer, byte[] subBuffer) {            //end 一般传递的是 mainBuffer.length
-        if (start < 0) {
-            start = 0;
-        }
-
-        if (start > mainBuffer.length) {
-            LogUtil.d(TAG, "start位置超出主数组长度！");
-            return -1;
-        }
-
-        if (end < start) {
-            LogUtil.d(TAG, "主数组中查找的开始位置大于结束位置！");
-            return -1;
-        }
-
-        if (end > mainBuffer.length) {
-            end = mainBuffer.length;
-        }
-
-        if (mainBuffer.length < subBuffer.length) {
-//            LogUtil.i(TAG, "主数组的长度 小于 子数组的长度，这种情况经过分析也是正常情形!");
-            return -1;
-        }
-
-        boolean isFound;        //子数组被找到
-        for (int i = start; i < end; i++) {
-            if (i <= end - subBuffer.length) {
-                isFound = true;
-                for (int j = 0; j < subBuffer.length; j++) {
-                    if (subBuffer[j] != mainBuffer[i + j]) {
-                        isFound = false;
-                        break;
-                    }
-                }
-            } else {
-                isFound = false;
-            }
-            if (isFound) {
-                return i;
-            }
-        }
-        return -1;
-    }
 
     /**
      * 解析配置表的方法，TODO 传递过来的参数一定就是 008888 开头的1024长度 数组
