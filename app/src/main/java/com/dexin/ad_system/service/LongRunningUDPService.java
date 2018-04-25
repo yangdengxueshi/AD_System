@@ -234,7 +234,7 @@ public class LongRunningUDPService extends Service {
 
         /**
          * 找出子数组subBuffer在主数组mainBuffer中的起始索引
-         * TODO 本方法进行了深度验证，没有问题
+         * TODO 本方法进行了深度验证,没有问题
          *
          * @param start      开始查找的位置
          * @param end        结束查找的位置
@@ -243,24 +243,21 @@ public class LongRunningUDPService extends Service {
          * @return 找到的起始索引（为-1表示没有找到）
          */
         private int indexOfSubBuffer(int start, int end, byte[] mainBuffer, byte[] subBuffer) {//end 一般传递的是 mainBuffer.length
+            int failure = -1;
+            if (subBuffer == null || mainBuffer == null || subBuffer.length > mainBuffer.length) return failure;//正常
             if (start < 0) start = 0;
-            if (start > mainBuffer.length) {
-                LogUtil.d(TAG, "start位置超出主数组长度！");
-                return -1;
-            }
-            if (end < start) {
-                LogUtil.d(TAG, "主数组中查找的开始位置大于结束位置！");
-                return -1;
+            if (start >= Math.min(end, mainBuffer.length)) {//
+                LogUtil.e(TAG, "start查找位置超出 Math.min(end, mainBuffer.length)!" + start + ":" + end + ":" + mainBuffer.length);
+                return failure;
             }
             if (end > mainBuffer.length) end = mainBuffer.length;
-            if (mainBuffer.length < subBuffer.length) return -1;//正常
 
             boolean isFound;//子数组被找到
             for (int i = start; i < end; i++) {
                 if (i <= end - subBuffer.length) {
                     isFound = true;
                     for (int j = 0; j < subBuffer.length; j++) {
-                        if (subBuffer[j] != mainBuffer[i + j]) {
+                        if (mainBuffer[i + j] != subBuffer[j]) {
                             isFound = false;
                             break;
                         }
@@ -268,11 +265,9 @@ public class LongRunningUDPService extends Service {
                 } else {
                     isFound = false;
                 }
-                if (isFound) {
-                    return i;
-                }
+                if (isFound) return i;
             }
-            return -1;
+            return failure;
         }
 
         /**
