@@ -24,6 +24,7 @@ public final class AppConfig {
     public static final int TS_PAYLOAD_SIZE = 184;
     public static final int UDP_PACKET_TAIL_SIZE = 311;
     public static final int UDP_PACKET_SIZE = 1460;//UDP包的大小（广科院给的UDP原始包大小就是1460字节）
+    public static final int CUS_DATA_SIZE = 1024;//自定义数据长度
 
     public static final byte UDP_HEAD_0x86_VALUE = (byte) 0x86;//广科院UDP头 0x86
     public static final byte TS_HEAD_0x47_VALUE = (byte) 0x47;//广科院TS头 0x47
@@ -34,7 +35,6 @@ public final class AppConfig {
     public static final String LINE_HEAD = "\t\t\t\t\t\t";
     public static final String FORM_FEED_CHARACTER = "\n\n\n\n\n";
     public static final String LOAD_FILE_OR_DELETE_MEDIA_LIST = "com.dexin.ad_system.LOAD_FILE_OR_DELETE_MEDIA_LIST";
-    //    public static final String FILE_FOLDER = Environment.getExternalStorageDirectory().getPath() + "/AD_System";        //多媒体文件夹：/mnt/internal_sd/AD_System
     public static final String FILE_FOLDER = CustomApplication.getContext().getExternalCacheDir().getAbsolutePath();        //多媒体文件夹：/mnt/internal_sd/AD_System
     public static final byte[] sHead008888Array = {(byte) 0x00, (byte) 0x88, (byte) 0x88};                         //自定义协议头0x 008888 头
 

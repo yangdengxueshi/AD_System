@@ -15,7 +15,6 @@ import com.dexin.ad_system.cdr.CDRUtils;
 import com.dexin.ad_system.util.LogUtil;
 import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
-import com.dexin.utilities.stringhelpers;
 import com.orhanobut.logger.Logger;
 
 import org.jetbrains.annotations.Contract;
@@ -112,7 +111,7 @@ public final class LongRunningUDPService extends Service {
 //                        mDatagramSocket.setSoTimeout(8000);
                         mDatagramSocket.receive(mDatagramPacket);//将单播套接字收到的UDP数据包存放于datagramPacket中(会阻塞)
                         mUdpDataContainer = mDatagramPacket.getData();//UDP数据包
-                        LogUtil.d(TAG, "UDP原始数据包AAAAAAAAAAAAAAAAAAAAA：" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
+//                        LogUtil.d(TAG, "UDP原始数据包AAAAAAAAAAAAAAAAAAAAA：" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
                         if ((mUdpDataContainer != null) && (mUdpDataContainer.length > 0)) {
                             mUdpDataContainer = parseUDPPacketToPayload(mUdpDataContainer);//解析UDP数据包后获得UDP净荷
 //                            LogUtil.d(TAG, "ts净荷包AAAAAAAAAAAAAAAAAAAAA：" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
@@ -256,13 +255,13 @@ public final class LongRunningUDPService extends Service {
         @NonNull
         private static byte[] parsePayloadArrayAfterHead008888(@NotNull byte[] currentPayloadArray) {//FIXME 有可能 currentPayloadArray 刚好能容下 00 88 88
             while (true) {//TODO currentPayloadArray 的前1024（长度完全可能小于1024）中一定不含有 00 88 88，1024表示要找到我们一个段长的数据，段的长度就是1024
-                if (currentPayloadArray.length >= 1024) {
+                if (currentPayloadArray.length >= AppConfig.CUS_DATA_SIZE) {
                     try {
-                        mCusDataArrayBlockingQueue.put(Arrays.copyOfRange(currentPayloadArray, 0, 1024));
+                        mCusDataArrayBlockingQueue.put(Arrays.copyOfRange(currentPayloadArray, 0, AppConfig.CUS_DATA_SIZE));
                     } catch (InterruptedException e) {
                         Logger.t(TAG).e(e, "parsePayloadArrayAfterHead008888: ");
                     }
-                    return Arrays.copyOfRange(currentPayloadArray, 1024, currentPayloadArray.length);//返回超出 1024 部分的数据
+                    return Arrays.copyOfRange(currentPayloadArray, AppConfig.CUS_DATA_SIZE, currentPayloadArray.length);//返回超出 1024 部分的数据
                 } else {//TODO 有可能 currentPayloadArray 刚好能容下 00 88 88
                     currentPayloadArray = AppConfig.jointBuffer(currentPayloadArray, getNextValidPayload(), currentPayloadArray.length);//TODO 取出包括 00 88 88 之后的所有内容，与下一段数据 进行拼接 ,截取前1024        (拼接之后必须检查前 1024 是否还有一个 008888)
                 }

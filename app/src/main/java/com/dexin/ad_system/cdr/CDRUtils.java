@@ -26,11 +26,11 @@ public class CDRUtils {
     private static int configTableVersionNumber = -1;                           //配置表 的 版本号
     //文件数据模型（guid）
     private static List<Long> guidList = new ArrayList<>();                     //配置表：“元素guid数组”
-    private static LongSparseArray<CDRElement> mCDRElementLongSparseArray = new LongSparseArray<>();       //TODO 存放 GUID 和 元素项
+    private static final LongSparseArray<CDRElement> mCDRElementLongSparseArray = new LongSparseArray<>();       //TODO 存放 GUID 和 元素项
     //定时器
-    private static Timer mTimer = new Timer();
+    private static final Timer mTimer = new Timer();
     //本地广播
-    private static String[] elementFormat = new String[]{".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};      //.3gp  .wav    .mkv    .mov    .mpeg   .flv
+    private static final String[] elementFormat = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};      //.3gp  .wav    .mkv    .mov    .mpeg   .flv
 
     /**
      * 解析配置表的方法，TODO 传递过来的参数一定就是 008888 开头的1024长度 数组
@@ -43,7 +43,7 @@ public class CDRUtils {
     public static void parseConfigTable(byte[] configTableBuffer, int position_87) {
         LogUtil.i(TAG, "开始做解析配置表的工作 -->");
         {//TODO 1.先期判断
-            if (configTableBuffer == null || configTableBuffer.length != 1024) {
+            if (configTableBuffer == null || configTableBuffer.length != AppConfig.CUS_DATA_SIZE) {
                 LogUtil.e(TAG, "配置表为null 或 配置表长度不符(不等于1024)！退出配置表解析操作。");
                 System.gc();
                 return;
@@ -268,7 +268,7 @@ public class CDRUtils {
             return;
         }
         if (sectionsNumberList != null) {
-            LogUtil.d(TAG, "段号-->列表Size：" + sectionsNumberList.size() + " 段号-->列表：" + sectionsNumberList.toString());
+            LogUtil.d(TAG, "段号-->列表Size：" + sectionsNumberList.size() + " 段号-->列表：" + sectionsNumberList);
         }
         int element_type = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
         if (element_type < 0) {
