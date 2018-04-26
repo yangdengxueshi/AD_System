@@ -6,6 +6,9 @@ import android.support.v4.content.LocalBroadcastManager;
 import com.blankj.utilcode.util.SPUtils;
 
 import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Arrays;
 
 /**
  * App配置文件
@@ -44,7 +47,7 @@ public final class AppConfig {
      */
     @Contract(pure = true)
     public static LocalBroadcastManager getLocalBroadcastManager() {
-        return AppConfig.LocalBroadcastManagerHolder.LOCAL_BROADCAST_MANAGER;
+        return LocalBroadcastManagerHolder.LOCAL_BROADCAST_MANAGER;
     }
 
 
@@ -59,6 +62,55 @@ public final class AppConfig {
      */
     @Contract(pure = true)
     public static SPUtils getSPUtils() {
-        return AppConfig.SPUtilsHolder.SP_UTILS;
+        return SPUtilsHolder.SP_UTILS;
     }
+
+
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------TODO 封装的处理字节数组Buffer的函数----------------------------------------------------------------
+    //------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------
+
+    /**
+     * 两个数组按照：逆向偏移量 进行拼接
+     *
+     * @param currentBuffer     当前Buffer
+     * @param nextBuffer        下一Buffer
+     * @param currentBackOffset currentBuffer 逆向偏移量
+     * @return 拼接后的结果数组
+     */
+    public static byte[] jointBuffer(byte[] currentBuffer, byte[] nextBuffer, int currentBackOffset) {//其实已经保证了 currentBuffer非null   nextBuffer非null
+        byte[] lEmptyBuffer = new byte[0];
+        if (currentBackOffset <= 0) {
+            return (nextBuffer != null) ? nextBuffer : lEmptyBuffer;
+        } else if (((currentBuffer == null) || (currentBuffer.length <= 0)) && ((nextBuffer == null) || (nextBuffer.length <= 0))) {
+            return lEmptyBuffer;
+        } else if ((currentBuffer == null) || (currentBuffer.length <= 0)) {
+            return nextBuffer;
+        } else if ((nextBuffer == null) || (nextBuffer.length <= 0)) {
+            return (currentBuffer.length <= currentBackOffset) ? currentBuffer : Arrays.copyOfRange(currentBuffer, (currentBuffer.length - currentBackOffset), currentBuffer.length);
+        } else {
+            return (currentBuffer.length <= currentBackOffset) ? concatAllArray(currentBuffer, nextBuffer) : concatAllArray(Arrays.copyOfRange(currentBuffer, (currentBuffer.length - currentBackOffset), currentBuffer.length), nextBuffer);
+        }
+    }
+
+    /**
+     * 多个数组合并
+     *
+     * @param first 第一个数组
+     * @param rest  其余数组
+     * @return 合并后数组
+     */
+    private static byte[] concatAllArray(@NotNull byte[] first, @NotNull byte[]... rest) {
+        int totalLength = first.length;
+        for (byte[] array : rest) totalLength += array.length;
+        byte[] result = Arrays.copyOf(first, totalLength);//增长部分会以"默认值"填充
+        int offset = first.length;
+        for (byte[] array : rest) {
+            System.arraycopy(array, 0, result, offset, array.length);
+            offset += array.length;
+        }
+        return result;
+    }
+
+
 }

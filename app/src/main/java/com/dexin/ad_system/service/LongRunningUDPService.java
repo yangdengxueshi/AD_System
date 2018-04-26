@@ -16,7 +16,8 @@ import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
 import com.orhanobut.logger.Logger;
 
-import java.io.IOException;
+import org.jetbrains.annotations.NotNull;
+
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -24,8 +25,8 @@ import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 
-public class LongRunningUDPService extends Service {
-    private static final ArrayBlockingQueue<byte[]> mPayloadArrayBlockingQueue = new ArrayBlockingQueue<>(500);//存放"(0~6)*184净荷"的阻塞队列
+public final class LongRunningUDPService extends Service {
+    private static final ArrayBlockingQueue<byte[]> mPayloadArrayBlockingQueue = new ArrayBlockingQueue<>(1000);//存放"(0~6)*184净荷"的阻塞队列
     private PayloadProducerThread mPayloadProducerThread;
     private PayloadConsumerThread mPayloadConsumerThread;
 
@@ -84,7 +85,7 @@ public class LongRunningUDPService extends Service {
 
         @Override
         public void run() {
-            LogUtil.e(TAG, "################################################ 开始接收CDR_Wifi_UDP 数据包 ################################################");
+            LogUtil.e(TAG, "################################################ 开始接收CDR_Wifi_UDP数据包 ##################################################");
             try {
                 isNeedReceiveUDP = true;//标志"重新开始接受CDR_Wifi_UDP 数据包"
                 if (mUdpDataContainer == null) mUdpDataContainer = new byte[AppConfig.UDP_PACKET_SIZE];//1460包长
@@ -107,7 +108,7 @@ public class LongRunningUDPService extends Service {
                                 mPayloadArrayBlockingQueue.put(mUdpDataContainer);//TODO 这里为了方便后面的解析工作，传入的是UDP净荷；可能引起掉包，再接收一轮
                             }
                         }
-                    } catch (IOException | InterruptedException e) {
+                    } catch (Exception e) {
                         Logger.t(TAG).e(e, "run: ");
                     }
                 }
@@ -200,7 +201,7 @@ public class LongRunningUDPService extends Service {
             while (isNeedParsePayloadData) {
                 mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);        //TODO 一、在当前净荷数组中寻找 00 88 88 的下标                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
                 while (mHead008888Index < 0) {//TODO （完全可能还是找不到，因为有大量的填充数据“0000000000000000” 和 “FFFFFFFFFFFFFFF”）,所以需要一直向后拼接寻找 008888 ，直到找到（mHead008888Index>=0）为止
-                    mCurrentPayloadArray = jointBuffer(mCurrentPayloadArray, getNextValidPayload(), 2);      //TODO 基于上面的原因，长度也不一定是1106
+                    mCurrentPayloadArray = AppConfig.jointBuffer(mCurrentPayloadArray, getNextValidPayload(), AppConfig.sHead008888Array.length - 1);      //TODO 基于上面的原因，长度也不一定是1106
                     mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);                                                                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
                 }//TODO 经历了循环之后，一定可以在 mCurrentPayloadArray 中找到 008888 ,找到了退出循环的时候 mHead008888Index >= 0 一定成立
                 byte[] payloadAfterHead_008888 = new byte[mCurrentPayloadArray.length - mHead008888Index];      //TODO 注意：payloadAfterHead 的长度有可能刚好能容下 00 88 88
@@ -277,7 +278,7 @@ public class LongRunningUDPService extends Service {
          * @param currentPayloadArray 当前净荷数组(绝对是以 008888 开头的)
          * @return 超出部分的净荷数组    TODO    去作为再次寻找  008888  的数组
          */
-        private byte[] parsePayloadArrayAfterHead008888(byte[] currentPayloadArray) {        //TODO 有可能 currentPayloadArray 刚好能容下 00 88 88
+        private static byte[] parsePayloadArrayAfterHead008888(@NotNull byte[] currentPayloadArray) {        //TODO 有可能 currentPayloadArray 刚好能容下 00 88 88
             byte[] front1024OfCurrentPayloadArray = new byte[1024];                 //TODO 特别注意：由于文件完全有可能 本身就含有数据008888，所以不要在[3,1023]之间再找008888了
             byte[] overRangePayloadArray;
 
@@ -289,7 +290,7 @@ public class LongRunningUDPService extends Service {
                     overRangePayloadArray = cutOverRangePayloadArray(currentPayloadArray);
                     break;
                 } else {//TODO 有可能 currentPayloadArray 刚好能容下 00 88 88
-                    currentPayloadArray = jointBuffer(currentPayloadArray, getNextValidPayload(), currentPayloadArray.length);//TODO 取出包括 00 88 88 之后的所有内容，与下一段数据 进行拼接 ,截取前1024        (拼接之后必须检查前 1024 是否还有一个 008888)
+                    currentPayloadArray = AppConfig.jointBuffer(currentPayloadArray, getNextValidPayload(), currentPayloadArray.length);//TODO 取出包括 00 88 88 之后的所有内容，与下一段数据 进行拼接 ,截取前1024        (拼接之后必须检查前 1024 是否还有一个 008888)
                 }
             }
             //开始解析数据
@@ -304,17 +305,16 @@ public class LongRunningUDPService extends Service {
          * @param currentPayloadArray 要返回超出 1024 部分净荷的数组
          * @return 超出 1024 部分的数组内容
          */
-        private byte[] cutOverRangePayloadArray(byte[] currentPayloadArray) {        //TODO 一定要保证传递过来的参数数组长度 >= 1024
+        private static byte[] cutOverRangePayloadArray(@NotNull byte[] currentPayloadArray) {        //TODO 一定要保证传递过来的参数数组长度 >= 1024
             if (currentPayloadArray.length >= 1024) {
                 //TODO 超出的长度不能丢，要保存起来
                 byte[] overRangePayloadArray = new byte[currentPayloadArray.length - 1024];
                 System.arraycopy(currentPayloadArray, 1024, overRangePayloadArray, 0, overRangePayloadArray.length);
                 return overRangePayloadArray;
-            } else if (currentPayloadArray.length < 1024) {
-                LogUtil.d(TAG, "当前净荷数组长度小于 1024 ，不能截取到前 1024 ，会引起重大Bug！");
+            } else {
+                LogUtil.e(TAG, "当前净荷数组长度小于 1024 ，不能截取到前 1024 ，会引起重大Bug！");
                 return currentPayloadArray;
             }
-            return currentPayloadArray;
         }
 
         /**
@@ -322,51 +322,12 @@ public class LongRunningUDPService extends Service {
          *
          * @param front1024OfCurrentPayloadArray 拼接好的以 008888 开头的 1024字节 的数据
          */
-        private void parse_1024Data_After008888(byte[] front1024OfCurrentPayloadArray) {
+        private static void parse_1024Data_After008888(@NotNull byte[] front1024OfCurrentPayloadArray) {
             if (front1024OfCurrentPayloadArray[4] == AppConfig.head_0x87_value) {            // 获得配置表，开始解析配置表 TODO front1024OfCurrentPayloadArray 一定是00 88 88 xx 87开头
                 CDRUtils.parseConfigTable(front1024OfCurrentPayloadArray, 4);
             } else if (front1024OfCurrentPayloadArray[4] == AppConfig.head_0x86_value) {     // 获得元素表，开始解析元素表 TODO front1024OfCurrentPayloadArray 一定是00 88 88 xx 86开头
                 CDRUtils.parseSectionData(front1024OfCurrentPayloadArray, 4);
             }
-        }
-
-        /**
-         * 两个数组按照：逆向偏移量 进行拼接
-         *
-         * @param currentBuffer     当前Buffer
-         * @param nextBuffer        下一个Buffer
-         * @param currentBackOffset currentBuffer 倒数个数
-         * @return 拼接后的结果数组
-         */
-        private static byte[] jointBuffer(byte[] currentBuffer, byte[] nextBuffer, int currentBackOffset) {
-            byte[] sumBuffer = new byte[0];
-            if (currentBackOffset < 0) return (nextBuffer != null) ? nextBuffer : sumBuffer;
-            if (((currentBuffer == null) || (currentBuffer.length == 0)) && ((nextBuffer == null) || (nextBuffer.length == 0))) {
-                return sumBuffer;
-            } else if (((currentBuffer == null) || (currentBuffer.length == 0)) && ((nextBuffer != null) && (nextBuffer.length >= 0))) {
-                return nextBuffer;
-            } else if (((currentBuffer != null) && (currentBuffer.length >= 0)) && ((nextBuffer == null) || (nextBuffer.length == 0))) {
-                if (currentBuffer.length <= currentBackOffset) {
-                    return currentBuffer;
-                } else if (currentBuffer.length > currentBackOffset) {
-                    sumBuffer = new byte[currentBackOffset];
-                    System.arraycopy(currentBuffer, (currentBuffer.length - currentBackOffset), sumBuffer, 0, sumBuffer.length);
-                    return sumBuffer;
-                }
-            } else if (((currentBuffer != null) && (currentBuffer.length >= 0)) && ((nextBuffer != null) && (nextBuffer.length >= 0))) {
-                if (currentBuffer.length <= currentBackOffset) {
-                    sumBuffer = new byte[currentBuffer.length + nextBuffer.length];
-                    System.arraycopy(currentBuffer, 0, sumBuffer, 0, currentBuffer.length);
-                    System.arraycopy(nextBuffer, 0, sumBuffer, currentBuffer.length, nextBuffer.length);
-                    return sumBuffer;
-                } else if (currentBuffer.length > currentBackOffset) {
-                    sumBuffer = new byte[currentBackOffset + nextBuffer.length];
-                    System.arraycopy(currentBuffer, (currentBuffer.length - currentBackOffset), sumBuffer, 0, currentBackOffset);
-                    System.arraycopy(nextBuffer, 0, sumBuffer, currentBackOffset, nextBuffer.length);
-                    return sumBuffer;
-                }
-            }
-            return sumBuffer;
         }
     }
 }
