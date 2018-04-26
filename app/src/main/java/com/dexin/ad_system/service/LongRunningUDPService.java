@@ -197,14 +197,12 @@ public final class LongRunningUDPService extends Service {
             LogUtil.e(TAG, "################################################ 开始解析净荷数据 ################################################");
             isNeedParsePayloadData = true;
             while (isNeedParsePayloadData) {
-                mHead008888Index = AppConfig.indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);        //TODO 一、在当前净荷数组中寻找 00 88 88 的下标                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
-                while (mHead008888Index < 0) {//TODO （完全可能还是找不到，因为有大量的填充数据“0000000000000000” 和 “FFFFFFFFFFFFFFF”）,所以需要一直向后拼接寻找 008888 ，直到找到（mHead008888Index>=0）为止
-                    mCurrentPayloadArray = AppConfig.jointBuffer(mCurrentPayloadArray, getNextValidPayload(), AppConfig.sHead008888Array.length - 1);      //TODO 基于上面的原因，长度也不一定是1106
-                    mHead008888Index = AppConfig.indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);                                                                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
+                mHead008888Index = AppConfig.indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);//TODO 一、在当前净荷数组中寻找 008888 的下标
+                while (mHead008888Index < 0) {//FIXME （完全可能还是找不到,因为有大量的填充数据"0000000000000000" 和 "FFFFFFFFFFFFFFF"）,所以需要一直向后拼接寻找 008888 ,直到找到（mHead008888Index >= 0）为止
+                    mCurrentPayloadArray = AppConfig.jointBuffer(mCurrentPayloadArray, getNextValidPayload(), AppConfig.sHead008888Array.length - 1);//FIXME 基于上面的原因，长度也不一定是1106
+                    mHead008888Index = AppConfig.indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);
                 }//TODO 经历了循环之后，一定可以在 mCurrentPayloadArray 中找到 008888 ,找到了退出循环的时候 mHead008888Index >= 0 一定成立
-                byte[] payloadAfterHead_008888 = new byte[mCurrentPayloadArray.length - mHead008888Index];      //TODO 注意：payloadAfterHead 的长度有可能刚好能容下 00 88 88
-                System.arraycopy(mCurrentPayloadArray, mHead008888Index, payloadAfterHead_008888, 0, payloadAfterHead_008888.length);
-                mCurrentPayloadArray = parsePayloadArrayAfterHead008888(payloadAfterHead_008888);        //TODO 传递的是以“008888”头为起始的数组，返回的是“超出部分的净荷内容”来作为“当前的净荷内容”去继续查找拼接
+                mCurrentPayloadArray = parsePayloadArrayAfterHead008888(Arrays.copyOfRange(mCurrentPayloadArray, mHead008888Index, mCurrentPayloadArray.length));//TODO 传递的是以"008888"头为起始的数组，返回的是"超出部分的净荷内容"来作为"当前的净荷内容"去继续查找拼接
             }
         }
 
