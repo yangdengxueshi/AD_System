@@ -21,7 +21,6 @@ import org.jetbrains.annotations.NotNull;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.concurrent.ArrayBlockingQueue;
 
@@ -191,18 +190,17 @@ public final class LongRunningUDPService extends Service {
         private static final String TAG = "TAG_PayloadConsumerThread";
         private volatile boolean isNeedParsePayloadData;
         private int mHead008888Index;//记录"自定义协议头 008888"的下标
-        private byte[] mCurrentPayloadArray;
+        private byte[] mCurrentPayloadArray = {};//程序刚启动时无数据
 
         @Override
         public void run() {
             LogUtil.e(TAG, "################################################ 开始解析净荷数据 ################################################");
             isNeedParsePayloadData = true;
-            mCurrentPayloadArray = getNextValidPayload();//一开始从"净荷阻塞队列"中取出一个净荷作为"当前净荷"
             while (isNeedParsePayloadData) {
-                mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);        //TODO 一、在当前净荷数组中寻找 00 88 88 的下标                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
+                mHead008888Index = AppConfig.indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);        //TODO 一、在当前净荷数组中寻找 00 88 88 的下标                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
                 while (mHead008888Index < 0) {//TODO （完全可能还是找不到，因为有大量的填充数据“0000000000000000” 和 “FFFFFFFFFFFFFFF”）,所以需要一直向后拼接寻找 008888 ，直到找到（mHead008888Index>=0）为止
                     mCurrentPayloadArray = AppConfig.jointBuffer(mCurrentPayloadArray, getNextValidPayload(), AppConfig.sHead008888Array.length - 1);      //TODO 基于上面的原因，长度也不一定是1106
-                    mHead008888Index = indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);                                                                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
+                    mHead008888Index = AppConfig.indexOfSubBuffer(0, mCurrentPayloadArray.length, mCurrentPayloadArray, AppConfig.sHead008888Array);                                                                        //TODO E: 主数组的长度 小于 子数组的长度，可能引起一个Bug!
                 }//TODO 经历了循环之后，一定可以在 mCurrentPayloadArray 中找到 008888 ,找到了退出循环的时候 mHead008888Index >= 0 一定成立
                 byte[] payloadAfterHead_008888 = new byte[mCurrentPayloadArray.length - mHead008888Index];      //TODO 注意：payloadAfterHead 的长度有可能刚好能容下 00 88 88
                 System.arraycopy(mCurrentPayloadArray, mHead008888Index, payloadAfterHead_008888, 0, payloadAfterHead_008888.length);
@@ -230,44 +228,6 @@ public final class LongRunningUDPService extends Service {
                 Logger.t(TAG).e(e, "getNextValidPayload: ");
                 return new byte[0];//上一个return语句会阻塞,不会走到这一步!
             }
-        }
-
-        /**
-         * 找出子数组subBuffer在主数组mainBuffer中的起始索引
-         * TODO 本方法进行了深度验证,没有问题
-         *
-         * @param start      开始查找的位置
-         * @param end        结束查找的位置
-         * @param mainBuffer 主数组mainBuffer
-         * @param subBuffer  子数组subBuffer
-         * @return 找到的起始索引（为-1表示没有找到）
-         */
-        private static int indexOfSubBuffer(int start, int end, byte[] mainBuffer, byte[] subBuffer) {//end 一般传递的是 mainBuffer.length
-            int failure = -1;
-            if ((subBuffer == null) || (mainBuffer == null) || (subBuffer.length > mainBuffer.length)) return failure;//正常
-            if (start < 0) start = 0;
-            if (start >= Math.min(end, mainBuffer.length)) {//
-                LogUtil.e(TAG, MessageFormat.format("start查找位置超出 Math.min(end, mainBuffer.length)!{0}:{1}:{2}", start, end, mainBuffer.length));
-                return failure;
-            }
-            if (end > mainBuffer.length) end = mainBuffer.length;
-
-            boolean isFound;//子数组被找到
-            for (int i = start; i < end; i++) {
-                if (i <= (end - subBuffer.length)) {
-                    isFound = true;
-                    for (int j = 0; j < subBuffer.length; j++) {
-                        if (mainBuffer[i + j] != subBuffer[j]) {
-                            isFound = false;
-                            break;
-                        }
-                    }
-                } else {
-                    isFound = false;
-                }
-                if (isFound) return i;
-            }
-            return failure;
         }
 
         /**

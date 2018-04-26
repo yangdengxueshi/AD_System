@@ -1,19 +1,21 @@
 package com.dexin.ad_system.app;
 
-import android.os.Environment;
 import android.support.v4.content.LocalBroadcastManager;
 
 import com.blankj.utilcode.util.SPUtils;
+import com.dexin.ad_system.util.LogUtil;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.text.MessageFormat;
 import java.util.Arrays;
 
 /**
  * App配置文件
  */
 public final class AppConfig {
+    private static final String TAG = "TAG_AppConfig";
     public static final int PORT = 8080;//服务器端口
     // 21+188*6+311=1460
     public static final int UDP_PACKET_HEADER_SIZE = 21;//UDP包头长度
@@ -32,8 +34,9 @@ public final class AppConfig {
     public static final String LINE_HEAD = "\t\t\t\t\t\t";
     public static final String FORM_FEED_CHARACTER = "\n\n\n\n\n";
     public static final String LOAD_FILE_OR_DELETE_MEDIA_LIST = "com.dexin.ad_system.LOAD_FILE_OR_DELETE_MEDIA_LIST";
-    public static final String FILE_FOLDER = Environment.getExternalStorageDirectory().getPath() + "/AD_System";        //多媒体文件夹：/mnt/internal_sd/AD_System
-    public static byte[] sHead008888Array = {(byte) 0x00, (byte) 0x88, (byte) 0x88};                         //自定义协议头0x 008888 头
+    //    public static final String FILE_FOLDER = Environment.getExternalStorageDirectory().getPath() + "/AD_System";        //多媒体文件夹：/mnt/internal_sd/AD_System
+    public static final String FILE_FOLDER = CustomApplication.getContext().getExternalCacheDir().getAbsolutePath();        //多媒体文件夹：/mnt/internal_sd/AD_System
+    public static final byte[] sHead008888Array = {(byte) 0x00, (byte) 0x88, (byte) 0x88};                         //自定义协议头0x 008888 头
 
 
     private static final class LocalBroadcastManagerHolder {
@@ -113,4 +116,41 @@ public final class AppConfig {
     }
 
 
+    /**
+     * 找出子数组subBuffer在主数组mainBuffer中的起始索引
+     * TODO 本方法进行了深度验证,没有问题
+     *
+     * @param start      开始查找的位置
+     * @param end        结束查找的位置
+     * @param mainBuffer 主数组mainBuffer
+     * @param subBuffer  子数组subBuffer
+     * @return 找到的起始索引（为-1表示没有找到）
+     */
+    public static int indexOfSubBuffer(int start, int end, byte[] mainBuffer, byte[] subBuffer) {//end 一般传递的是 mainBuffer.length
+        int failure = -1;
+        if ((subBuffer == null) || (mainBuffer == null) || (subBuffer.length > mainBuffer.length)) return failure;//正常
+        if (start < 0) start = 0;
+        if (start >= Math.min(end, mainBuffer.length)) {//
+            LogUtil.e(TAG, MessageFormat.format("start查找位置超出 Math.min(end, mainBuffer.length)!{0}:{1}:{2}", start, end, mainBuffer.length));
+            return failure;
+        }
+        if (end > mainBuffer.length) end = mainBuffer.length;
+
+        boolean isFound;//子数组被找到
+        for (int i = start; i < end; i++) {
+            if (i <= (end - subBuffer.length)) {
+                isFound = true;
+                for (int j = 0; j < subBuffer.length; j++) {
+                    if (mainBuffer[i + j] != subBuffer[j]) {
+                        isFound = false;
+                        break;
+                    }
+                }
+            } else {
+                isFound = false;
+            }
+            if (isFound) return i;
+        }
+        return failure;
+    }
 }
