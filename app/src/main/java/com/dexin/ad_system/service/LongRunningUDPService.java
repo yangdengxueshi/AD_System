@@ -236,12 +236,11 @@ public final class LongRunningUDPService extends Service {
          * @param currentPayloadArray 当前净荷数组(绝对是以 008888 开头的)
          * @return 超出部分的净荷数组    TODO    去作为再次寻找  008888  的数组
          */
-        private static byte[] parsePayloadArrayAfterHead008888(@NotNull byte[] currentPayloadArray) {        //TODO 有可能 currentPayloadArray 刚好能容下 00 88 88
-            byte[] front1024OfCurrentPayloadArray = new byte[1024];                 //TODO 特别注意：由于文件完全有可能 本身就含有数据008888，所以不要在[3,1023]之间再找008888了
+        private static byte[] parsePayloadArrayAfterHead008888(@NotNull byte[] currentPayloadArray) {//FIXME 有可能 currentPayloadArray 刚好能容下 00 88 88
+            byte[] front1024OfCurrentPayloadArray = new byte[1024];//TODO 特别注意：由于文件完全有可能 本身就含有数据008888，所以不要在[3,1023]之间再找008888了
             byte[] overRangePayloadArray;
 
-            while (true) {
-                //TODO currentPayloadArray 的前1024（长度完全可能小于1024）中一定不含有 00 88 88，1024表示要找到我们一个段长的数据，段的长度就是1024
+            while (true) {//TODO currentPayloadArray 的前1024（长度完全可能小于1024）中一定不含有 00 88 88，1024表示要找到我们一个段长的数据，段的长度就是1024
                 if (currentPayloadArray.length >= 1024) {
                     System.arraycopy(currentPayloadArray, 0, front1024OfCurrentPayloadArray, 0, front1024OfCurrentPayloadArray.length);
                     //TODO 超出的长度不能丢，要保存起来
