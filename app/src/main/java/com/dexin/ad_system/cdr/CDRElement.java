@@ -6,8 +6,8 @@ import java.util.List;
 /**
  * 配置表中的某一元素项
  */
-class CDRElement {
-    private long elementGUID = 0;          //元素GUID
+public class CDRElement {
+    private long elementGUID;          //元素GUID
     private int versionNumber = -1;        //版本号
     private List<Integer> sectionsNumberList = new ArrayList<>();       //存放段号的集合(最多65536个段)。
 
