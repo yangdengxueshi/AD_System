@@ -10,6 +10,9 @@ import com.dexin.ad_system.util.LogUtil;
 import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
 import com.dexin.utilities.stringhelpers;
+import com.orhanobut.logger.Logger;
+
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.RandomAccessFile;
@@ -21,7 +24,7 @@ import java.util.TimerTask;
 /**
  * CDR 工具
  */
-public class CDRUtils {
+public final class CDRUtils {
     private static final String TAG = "TAG_CDRUtils";
     private static int configTableVersionNumber = -1;                           //配置表 的 版本号
     //文件数据模型（guid）
@@ -43,14 +46,12 @@ public class CDRUtils {
     public static void parseConfigTable(byte[] configTableBuffer, int position_87) {
         LogUtil.i(TAG, "开始做解析配置表的工作 -->");
         {//TODO 1.先期判断
-            if (configTableBuffer == null || configTableBuffer.length != AppConfig.CUS_DATA_SIZE) {
+            if ((configTableBuffer == null) || (configTableBuffer.length != AppConfig.CUS_DATA_SIZE)) {
                 LogUtil.e(TAG, "配置表为null 或 配置表长度不符(不等于1024)！退出配置表解析操作。");
-                System.gc();
                 return;
             }
             if (position_87 != 4) {
                 LogUtil.e(TAG, "配置表表头索引错误！退出配置表解析操作。");
-                System.gc();
                 return;
             }
         }
@@ -60,14 +61,12 @@ public class CDRUtils {
         int table_id = arrayhelpers.GetInt8(configTableBuffer, parseIndex);                //1.配置表：table_id
         if (table_id != (byte) 0x87) {
             LogUtil.e(TAG, "配置表表头不符！退出配置表解析操作。");
-            System.gc();
             return;         //根本就不是配置表，丢掉配置表Buffer
         }
 
         int version_number = arrayhelpers.GetInt8(configTableBuffer, parseIndex);          //2.配置表：“版本号”
         if (version_number < 0) {
             LogUtil.e(TAG, "配置表版本号为负！退出配置表解析操作。");
-            System.gc();
             return;
         } else {
             if (configTableVersionNumber != version_number) {                 //程序第一次（包括被杀掉后）启动时接收到了数据，开始更新版本号，表示重新接收新文件
@@ -76,16 +75,14 @@ public class CDRUtils {
                 configTableVersionNumber = version_number;              //更新版本号
             } else {//服务器发送的是同一版本的文件，退出配置表解析操作
                 LogUtil.d(TAG, "已经成功解析过相同版本号的配置表，不再重复解析配置表Buffer！");
-                System.gc();
                 return;
             }
         }
 
         int section_length = arrayhelpers.GetInt16(configTableBuffer, parseIndex);         //3.配置表：“段长度”
-        if (section_length < 2 + 2 + 1 + 1 + 1 + 4) {
+        if (section_length < (2 + 2 + 1 + 1 + 1 + 4)) {
             LogUtil.e(TAG, "配置表段长度不够，退出配置表解析操作。");
             clearGuidListAndResetVersionNumber();
-            System.gc();
             return;
         }
 
@@ -93,7 +90,6 @@ public class CDRUtils {
         if (section_number < 0) {
             LogUtil.d(TAG, "配置表当前段号小于0，退出配置表解析操作。");
             clearGuidListAndResetVersionNumber();
-            System.gc();
             return;
         }
 
@@ -101,7 +97,6 @@ public class CDRUtils {
         if (section_count < 0) {
             LogUtil.d(TAG, "配置表中解析出段的数量小于0，退出配置表解析操作。");
             clearGuidListAndResetVersionNumber();
-            System.gc();
             return;
         }
 
@@ -112,7 +107,6 @@ public class CDRUtils {
         if (element_count < 0) {
             LogUtil.d(TAG, "配置表解析出元素个数小于0，退出配置表解析操作。");
             clearGuidListAndResetVersionNumber();
-            System.gc();
             return;
         }
 
@@ -146,7 +140,6 @@ public class CDRUtils {
         if (calcCRC != crc) {                           //CRC不相等，表示数据不对
             Log.d(TAG, "配置表CRC校验失败:" + stringhelpers.bytesToHexString(configTableBuffer).toUpperCase());
             clearGuidListAndResetVersionNumber();
-            System.gc();
             return;
         } else {
             LogUtil.i(TAG, "配置表CRC校验成功");
@@ -156,7 +149,6 @@ public class CDRUtils {
             if (element_count != guid_list_parsed.size()) {
                 LogUtil.e(TAG, "解析所得文件数量不等于for循环中获取的文件数量。");
                 clearGuidListAndResetVersionNumber();
-                System.gc();
                 return;
             } else {
                 mCDRElementLongSparseArray.clear();
@@ -170,7 +162,6 @@ public class CDRUtils {
                 }
             }
         }
-
         LogUtil.e(TAG, "解析配置表成功！" + guid_list_parsed.size() + "/" + element_count);
     }
 
@@ -181,11 +172,10 @@ public class CDRUtils {
      * @param position_86   已经查找到的0x86所在位置
      */
     public static void parseSectionData(byte[] sectionBuffer, int position_86) {
-        LogUtil.d(TAG, "原始数据找68-------》" + stringhelpers.bytesToHexString(sectionBuffer).toUpperCase());
+        LogUtil.d(TAG, "原始数据找86-------》" + stringhelpers.bytesToHexString(sectionBuffer).toUpperCase());
         LogUtil.d(TAG, "开始做解析段的工作 -->");
         if ((mCDRElementLongSparseArray.size() <= 0)) {
             LogUtil.d(TAG, "收到段数据，但程序启动后还未成功解析过配置表，暂不解析。");
-            System.gc();
             return;
         }
 
@@ -194,61 +184,52 @@ public class CDRUtils {
         int table_id = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
         if (table_id != (byte) 0x86) {
             LogUtil.e(TAG, "元素表表头不符！退出元素表解析操作。");
-            System.gc();
             return;         //根本就不是配置表，丢掉配置表Buffer
         }
 
         int version_number = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
         if (version_number < 0) {
             LogUtil.e(TAG, "元素表版本号为负！退出元素表解析操作。");
-            System.gc();
             return;
         } else if (configTableVersionNumber != version_number) {
             LogUtil.e(TAG, "接收到的元素表版本号与配置表版本号不一致，退出元素表解析工作。");
-            System.gc();
             return;
         }
 
         int section_length = arrayhelpers.GetInt16(sectionBuffer, parseIndex);
-        if (section_length < 2 + 2 + 4 + 1 + 1 + 4 + 4) {
+        if (section_length < (2 + 2 + 4 + 1 + 1 + 4 + 4)) {
             LogUtil.e(TAG, "元素表段长度不够，退出元素表解析操作。");
-            System.gc();
             return;
         }
 
         int section_number = arrayhelpers.GetInt16(sectionBuffer, parseIndex);
         if (section_number < 0) {
             LogUtil.e(TAG, "元素表当前段号小于0，退出元素表解析操作。");
-            System.gc();
             return;
         }
         LogUtil.d(TAG, "段号-->：" + section_number);
 
-        if (65 <= section_number && section_number <= 69) {
+        if ((65 <= section_number) && (section_number <= 69)) {
             LogUtil.d(TAG, "-------》段号：" + section_number + " [65,69]净荷数据：" + stringhelpers.bytesToHexString(sectionBuffer).toUpperCase());
         }
 
         int section_count = arrayhelpers.GetInt16(sectionBuffer, parseIndex);
         if (section_count < 0) {
             LogUtil.e(TAG, "元素表中解析出段的数量小于0，退出元素表解析操作。");
-            System.gc();
             return;
         }
         if (section_number >= section_count) {
             LogUtil.e(TAG, "元素表中解析出段号大于等于段数量，退出元素表解析操作。");
-            System.gc();
             return;
         }
 
         long element_guid = arrayhelpers.GetInt32(sectionBuffer, parseIndex);
         if (element_guid < 0) {
             LogUtil.e(TAG, "元素表解析出元素guid小于0，退出元素表解析操作。");
-            System.gc();
             return;
         }
         if (mCDRElementLongSparseArray.indexOfKey(element_guid) < 0) {                             //解析出的配置表中 没有要接收 当前GUID 的文件
             LogUtil.d(TAG, "收到 新版本的数据段 但是没有收到 新版本的配置表，不做解析！");
-            System.gc();
             return;
         }
 
@@ -257,14 +238,12 @@ public class CDRUtils {
         if (cdrElement != null) {
             if (cdrElement.getVersionNumber() != version_number) {
                 LogUtil.d(TAG, "解析所得的版本号与CDR元素项版本号不符，退出元素表解析操作。");
-                System.gc();
                 return;
             }
             sectionsNumberList = cdrElement.getSectionsNumberList();
         }
-        if (sectionsNumberList != null && (sectionsNumberList.contains(section_number))) {                                                      // 如果“一个文件中已经收取过当前段号”，就不再收取
+        if ((sectionsNumberList != null) && (sectionsNumberList.contains(section_number))) {                                                      // 如果“一个文件中已经收取过当前段号”，就不再收取
             LogUtil.d(TAG, "已经接收过当前段号的数据，不再重复解析，退出元素表解析操作。");
-            System.gc();
             return;
         }
         if (sectionsNumberList != null) {
@@ -273,27 +252,23 @@ public class CDRUtils {
         int element_type = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
         if (element_type < 0) {
             LogUtil.d(TAG, "元素表解析出元素类型小于0，退出元素表解析操作！");
-            System.gc();
             return;
         }
 
         int element_format = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
         if (element_format < 0) {
             LogUtil.d(TAG, "元素表解析出元素格式小于0，退出元素表解析操作！");
-            System.gc();
             return;
         }
 
         int section_data_length = arrayhelpers.GetInt32(sectionBuffer, parseIndex);
-        if (section_data_length <= 0 || section_data_length > 998) {
+        if ((section_data_length <= 0) || (section_data_length > 998)) {
             LogUtil.d(TAG, "元素表解析出元素大小不符合要求(0,998]，退出元素表解析操作！");
-            System.gc();
             return;
         }
         byte[] section_data = arrayhelpers.GetBytes(sectionBuffer, section_data_length, parseIndex);
         if (section_data.length <= 0) {
             LogUtil.d(TAG, "元素表解析出元素数据长度为负，退出元素表解析操作！");
-            System.gc();
             return;
         }
 
@@ -309,14 +284,12 @@ public class CDRUtils {
         if (calcCRC != crc) {
             LogUtil.e(TAG, "CRC校验错误的段落->   GUID=" + element_guid + "\t" + "段号=" + section_number);
             LogUtil.d(TAG, "CRC校验错误的Buffer：" + stringhelpers.bytesToHexString(sectionBuffer).toUpperCase());
-            System.gc();
             return;
         }
 
         //TODO 将本段数据写入到磁盘
-        if ((element_format < 0) || (element_format > elementFormat.length - 1)) {
+        if ((element_format < 0) || (element_format > (elementFormat.length - 1))) {
             LogUtil.d(TAG, "元素格式下标越界，退出元素表解析。");
-            System.gc();
             return;
         }
         String extention = elementFormat[element_format];
@@ -349,7 +322,7 @@ public class CDRUtils {
             }
             randomAccessFile.close();
         } catch (Exception e) {
-            e.printStackTrace();
+            Logger.t(TAG).e(e, "parseSectionData: ");
         }
     }
 
@@ -367,7 +340,7 @@ public class CDRUtils {
      * @param buffer 要计算CRC的Buffer字节数组
      * @return 自定义的CRC值
      */
-    private static int calculateCRC(byte[] buffer) {
+    private static int calculateCRC(@NotNull byte[] buffer) {
         byte[] crcBuffer = new byte[4];
         crcBuffer[0] = (byte) 0x12;
         crcBuffer[1] = (byte) 0x34;
