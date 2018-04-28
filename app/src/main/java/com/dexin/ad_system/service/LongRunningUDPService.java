@@ -28,6 +28,7 @@ import java.io.RandomAccessFile;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -180,7 +181,7 @@ public final class LongRunningUDPService extends Service {
                     LogUtil.e(TAG, "UDP原始数据包为 null 或 长度不是1460,数据不符合要求进而被丢弃!");
                     return null;
                 }
-                if (udpDataPacket[0] != AppConfig.UDP_HEAD_0x86_VALUE) {//这个0x86是广科院的头，注意与自定义 HEAD_0x86_VALUE 区分开   //TODO 5.筛选出 广科院0x86头 UDP数据报,(如果不是0x86开头的UDP包则抛弃掉)
+                if (udpDataPacket[0] != AppConfig.UDP_HEAD_0x86_VALUE) {//这个0x86是广科院的头，注意与自定义 ELEMENT_TABLE_DISCRIMINATOR 区分开   //TODO 5.筛选出 广科院0x86头 UDP数据报,(如果不是0x86开头的UDP包则抛弃掉)
                     LogUtil.e(TAG, "UDP原始数据包头不是广科院协议头0x86,不符合要求进而被舍弃!");
                     return null;
                 }
@@ -325,12 +326,12 @@ public final class LongRunningUDPService extends Service {
          */
         private static void parseCustomDataWithHead008888(@NotNull byte[] front1024OfCurrentPayloadArray) {
 //            LogUtil.d(TAG, "自定义协议数据AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(front1024OfCurrentPayloadArray).toUpperCase());
-            switch (front1024OfCurrentPayloadArray[4]) {
-                case AppConfig.HEAD_0x87_VALUE://TODO 获得配置表，开始解析配置表 front1024OfCurrentPayloadArray 一定是00 88 88 xx 87开头
-                    parseConfigTable(front1024OfCurrentPayloadArray, 4);
+            switch (front1024OfCurrentPayloadArray[AppConfig.TABLE_DISCRIMINATOR_INDEX]) {
+                case AppConfig.CONFIG_TABLE_DISCRIMINATOR://TODO 获得配置表,开始解析配置表  front1024OfCurrentPayloadArray 一定是00 88 88 xx 87开头
+                    parseConfigTable(front1024OfCurrentPayloadArray);
                     break;
-                case AppConfig.HEAD_0x86_VALUE://TODO 获得元素表，开始解析元素表 front1024OfCurrentPayloadArray 一定是00 88 88 xx 86开头
-                    parseSectionData(front1024OfCurrentPayloadArray, 4);
+                case AppConfig.ELEMENT_TABLE_DISCRIMINATOR://TODO 获得元素表,开始解析元素表 front1024OfCurrentPayloadArray 一定是00 88 88 xx 86开头
+                    parseSectionData(front1024OfCurrentPayloadArray);
                     break;
                 default:
             }
@@ -349,22 +350,17 @@ public final class LongRunningUDPService extends Service {
          * TODO 相同版本号的配置表在解析成功的前提下我们只解析一次
          *
          * @param configTableBuffer 已经拼接好的配置表Buffer（008888xx87 开头，1024长度）
-         * @param position_87       已经查找到的0x87所在位置
          */
-        private static void parseConfigTable(byte[] configTableBuffer, int position_87) {
+        private static void parseConfigTable(byte[] configTableBuffer) {
             LogUtil.i(TAG, "开始做解析配置表的工作 -->");
             {//TODO 1.先期判断
                 if ((configTableBuffer == null) || (configTableBuffer.length != AppConfig.CUS_DATA_SIZE)) {
                     LogUtil.e(TAG, "配置表为null 或 配置表长度不符(不等于1024)！退出配置表解析操作。");
                     return;
                 }
-                if (position_87 != 4) {
-                    LogUtil.e(TAG, "配置表表头索引错误！退出配置表解析操作。");
-                    return;
-                }
             }
 
-            CopyIndex parseIndex = new CopyIndex(position_87);                    //下标先偏移到 87 位置，才能开始做解析工作
+            CopyIndex parseIndex = new CopyIndex(4);                    //下标先偏移到 87 位置，才能开始做解析工作
 
             int table_id = arrayhelpers.GetInt8(configTableBuffer, parseIndex);                //1.配置表：table_id
             if (table_id != (byte) 0x87) {
@@ -438,7 +434,7 @@ public final class LongRunningUDPService extends Service {
 
             //获取CRCBuffer
             parseIndex.Reset();
-            parseIndex.AddIndex((position_87 + 4));
+            parseIndex.AddIndex((4 + 4));
             byte[] CRCBuffer = arrayhelpers.GetBytes(configTableBuffer, section_length - 4, parseIndex);
             int calcCRC = calculateCRC(CRCBuffer);
 
@@ -446,11 +442,9 @@ public final class LongRunningUDPService extends Service {
 
             //校验CRC
             if (calcCRC != crc) {                           //CRC不相等，表示数据不对
-                LogUtil.d(TAG, "配置表CRC校验失败:" + stringhelpers.bytesToHexString(configTableBuffer).toUpperCase());
+                LogUtil.e(TAG, MessageFormat.format("配置表CRC校验失败:{0}", stringhelpers.bytesToHexString(configTableBuffer).toUpperCase()));
                 clearGuidListAndResetVersionNumber();
                 return;
-            } else {
-                LogUtil.i(TAG, "配置表CRC校验成功");
             }
 
             if (element_count != guid_list_parsed.size()) {
@@ -461,30 +455,29 @@ public final class LongRunningUDPService extends Service {
                 mCDRElementLongSparseArray.clear();
                 guidList = guid_list_parsed;
                 for (long guid : guidList) {
-                    LogUtil.i(TAG, "文件guid:" + guid);
+                    LogUtil.i(TAG, MessageFormat.format("文件guid:{0}", guid));
                     CDRElement cdrElement = new CDRElement();
                     cdrElement.setElementGUID(guid);
                     cdrElement.setVersionNumber(version_number);
                     mCDRElementLongSparseArray.put(guid, cdrElement);
                 }
             }
-            LogUtil.e(TAG, "解析配置表成功！" + guid_list_parsed.size() + "/" + element_count);
+            LogUtil.i(TAG, MessageFormat.format("解析配置表成功！{0}/{1}", guid_list_parsed.size(), element_count));
         }
 
         /**
          * 解析段的数据，并写入文件; 长度已经事先拼接好了，不用再考虑解析完成后剩余内容的拼接问题
          *
          * @param sectionBuffer 段的Buffer字节数组
-         * @param position_86   已经查找到的0x86所在位置
          */
-        private static void parseSectionData(byte[] sectionBuffer, int position_86) {
-            LogUtil.d(TAG, "开始做解析段的工作,原始数据找86-------》" + stringhelpers.bytesToHexString(sectionBuffer).toUpperCase());
+        private static void parseSectionData(byte[] sectionBuffer) {
+            LogUtil.d(TAG, MessageFormat.format("开始做解析段的工作,原始数据找86-------》{0}", stringhelpers.bytesToHexString(sectionBuffer).toUpperCase()));
             if ((mCDRElementLongSparseArray.size() <= 0)) {
                 LogUtil.d(TAG, "收到段数据，但程序启动后还未成功解析过配置表，暂不解析。");
                 return;
             }
 
-            CopyIndex parseIndex = new CopyIndex(position_86);
+            CopyIndex parseIndex = new CopyIndex(4);
 
             int table_id = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
             if (table_id != (byte) 0x86) {
@@ -512,10 +505,10 @@ public final class LongRunningUDPService extends Service {
                 LogUtil.e(TAG, "元素表当前段号小于0，退出元素表解析操作。");
                 return;
             }
-            LogUtil.d(TAG, "段号-->：" + section_number);
+            LogUtil.d(TAG, MessageFormat.format("段号-->：{0}", section_number));
 
             if ((65 <= section_number) && (section_number <= 69)) {
-                LogUtil.d(TAG, "-------》段号：" + section_number + " [65,69]净荷数据：" + stringhelpers.bytesToHexString(sectionBuffer).toUpperCase());
+                LogUtil.d(TAG, MessageFormat.format("-------》段号：{0} [65,69]净荷数据：{1}", section_number, stringhelpers.bytesToHexString(sectionBuffer).toUpperCase()));
             }
 
             int section_count = arrayhelpers.GetInt16(sectionBuffer, parseIndex);
@@ -552,7 +545,7 @@ public final class LongRunningUDPService extends Service {
                 return;
             }
             if (sectionsNumberList != null) {
-                LogUtil.d(TAG, "段号-->列表Size：" + sectionsNumberList.size() + " 段号-->列表：" + sectionsNumberList);
+                LogUtil.d(TAG, MessageFormat.format("段号-->列表Size：{0} 段号-->列表：{1}", sectionsNumberList.size(), sectionsNumberList));
             }
             int element_type = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
             if (element_type < 0) {
@@ -579,7 +572,7 @@ public final class LongRunningUDPService extends Service {
 
             //获取CRCBuffer
             parseIndex.Reset();
-            parseIndex.AddIndex(position_86 + 4);
+            parseIndex.AddIndex(4 + 4);
             byte[] CRCBuffer = arrayhelpers.GetBytes(sectionBuffer, section_length - 4, parseIndex);
             int calcCRC = calculateCRC(CRCBuffer);
 
@@ -587,8 +580,8 @@ public final class LongRunningUDPService extends Service {
 
             //校验CRC
             if (calcCRC != crc) {
-                LogUtil.e(TAG, "CRC校验错误的段落->   GUID=" + element_guid + "\t" + "段号=" + section_number);
-                LogUtil.d(TAG, "CRC校验错误的Buffer：" + stringhelpers.bytesToHexString(sectionBuffer).toUpperCase());
+                LogUtil.e(TAG, MessageFormat.format("CRC校验错误的段落->   GUID={0}\t段号={1}", element_guid, section_number));
+                LogUtil.d(TAG, MessageFormat.format("CRC校验错误的Buffer：{0}", stringhelpers.bytesToHexString(sectionBuffer).toUpperCase()));
                 return;
             }
 

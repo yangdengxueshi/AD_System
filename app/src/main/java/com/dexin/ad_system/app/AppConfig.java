@@ -28,8 +28,10 @@ public final class AppConfig {
     public static final int CUS_DATA_SIZE = 1024;//自定义数据长度
     public static final byte UDP_HEAD_0x86_VALUE = (byte) 0x86;//广科院UDP头 0x86
     public static final byte TS_HEAD_0x47_VALUE = (byte) 0x47;//广科院TS头 0x47
-    public static final byte HEAD_0x86_VALUE = (byte) 0x86;//元素表头
-    public static final byte HEAD_0x87_VALUE = (byte) 0x87;//配置表头
+
+    public static final byte ELEMENT_TABLE_DISCRIMINATOR = (byte) 0x86;//元素表区别符
+    public static final byte CONFIG_TABLE_DISCRIMINATOR = (byte) 0x87; //配置表区别符
+    public static final int TABLE_DISCRIMINATOR_INDEX = 4;//表区别符索引位置
 
     public static final String LINE_HEAD = "\t\t\t\t\t\t";
     public static final String FORM_FEED_CHARACTER = "\n\n\n\n\n";
