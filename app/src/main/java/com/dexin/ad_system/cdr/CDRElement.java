@@ -7,31 +7,18 @@ import java.util.List;
  * 配置表中的某一元素项
  */
 public class CDRElement {
-    private long elementGUID;          //元素GUID
-    private int versionNumber = -1;        //版本号
-    private List<Integer> sectionsNumberList = new ArrayList<>();       //存放段号的集合(最多65536个段)。
-
-    public long getElementGUID() {
-        return elementGUID;
-    }
-
-    public void setElementGUID(long elementGUID) {
-        this.elementGUID = elementGUID;
-    }
+    private int mVersionNumber = -1;//版本号
+    private final List<Integer> mSectionsNumberList = new ArrayList<>();//存放段号的集合(最多65536个段)。
 
     public int getVersionNumber() {
-        return versionNumber;
+        return mVersionNumber;
     }
 
     public void setVersionNumber(int versionNumber) {
-        this.versionNumber = versionNumber;
+        mVersionNumber = versionNumber;
     }
 
     public List<Integer> getSectionsNumberList() {
-        return sectionsNumberList;
-    }
-
-    public void setSectionsNumberList(List<Integer> sectionsNumberList) {
-        this.sectionsNumberList = sectionsNumberList;
+        return mSectionsNumberList;
     }
 }

@@ -35,10 +35,11 @@ public final class AppConfig {
 
     public static final String LINE_HEAD = "\t\t\t\t\t\t";
     public static final String FORM_FEED_CHARACTER = "\n\n\n\n\n";
-    public static final String LOAD_FILE_OR_DELETE_MEDIA_LIST = "com.dexin.ad_system.LOAD_FILE_OR_DELETE_MEDIA_LIST";
     public static final String FILE_FOLDER = CustomApplication.getContext().getExternalCacheDir().getAbsolutePath();        //多媒体文件夹：/mnt/internal_sd/AD_System
     public static final byte[] sHead008888Array = {(byte) 0x00, (byte) 0x88, (byte) 0x88};                         //自定义协议头0x 008888 头
 
+    public static final String LOAD_FILE_OR_DELETE_MEDIA_LIST = "com.dexin.ad_system.LOAD_FILE_OR_DELETE_MEDIA_LIST";
+    public static final String KEY_DELETE_MEDIA_LIST = "KEY_DELETE_MEDIA_LIST";
 
     private static final class LocalBroadcastManagerHolder {
         private static final LocalBroadcastManager LOCAL_BROADCAST_MANAGER = LocalBroadcastManager.getInstance(CustomApplication.getContext());

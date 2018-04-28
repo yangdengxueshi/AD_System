@@ -82,12 +82,12 @@ public class MainActivity extends AppCompatActivity {
 
     //TODO 六、自定义变量
     //1.图
-    private List<String> imageList = new ArrayList<>();
-    private List<String> txtList = new ArrayList<>();
-    private Timer mTimer = new Timer();
-    private int currentImageIndex = 0;
-    private boolean isSlideShowImage = false;   //程序一加载并没有正在播放幻灯片(图片)
-    private MediaPlayer mMediaPlayer = new MediaPlayer();
+    private final List<String> imageList = new ArrayList<>();
+    private final List<String> txtList = new ArrayList<>();
+    private final Timer mTimer = new Timer();
+    private int currentImageIndex;
+    private boolean isSlideShowImage;   //程序一加载并没有正在播放幻灯片(图片)
+    private final MediaPlayer mMediaPlayer = new MediaPlayer();
 
     //TODO 七、自定义Handler
     private final CustomHandler mCustomHandler = new CustomHandler(MainActivity.this);//声明为final
@@ -157,7 +157,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @OnShowRationale({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
-    void showSDCardPermissionRationale(final PermissionRequest request) {//提示用户为何要开启SD卡读写权限
+    void showSDCardPermissionRationale(PermissionRequest request) {//提示用户为何要开启SD卡读写权限
         new AlertDialog.Builder(MainActivity.this)
                 .setMessage("程序媒体文件操作依赖于对SD卡的读写!")
                 .setPositiveButton("确定", (dialog, which) -> {
@@ -425,7 +425,7 @@ public class MainActivity extends AppCompatActivity {
     public class LocalCDRBroadcastReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            boolean deleteMediaList = intent.getBooleanExtra("deleteMediaList", false);
+            boolean deleteMediaList = intent.getBooleanExtra(AppConfig.KEY_DELETE_MEDIA_LIST, false);
             String filePath = "";
 
             if (deleteMediaList) {                  //判断    是否需要将当前分类多媒体文件集合清空
