@@ -32,6 +32,7 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -445,7 +446,7 @@ public final class LongRunningUDPService extends Service {
                     mCDRElementLongSparseArray.put(guid, cdrElement);
                 }
             }
-            LogUtil.e(TAG, MessageFormat.format("解析配置表成功!\t\t{0}/{1}", guid_list.size(), element_count));
+            LogUtil.e(TAG, MessageFormat.format("解析配置表成功!\t\t{0}={1}?", guid_list.size(), element_count));
         }
 
         /**
@@ -454,65 +455,51 @@ public final class LongRunningUDPService extends Service {
          * @param sectionBuffer 段的Buffer字节数组
          */
         private static void parseSectionData(byte[] sectionBuffer) {
-            LogUtil.e(TAG, "收到元素表数据段,开始解析====>");
-            if ((mCDRElementLongSparseArray.size() <= 0)) {
-                LogUtil.d(TAG, "收到段数据，但程序启动后还未成功解析过配置表，暂不解析。");
+            LogUtil.e(TAG, "接收到元素表数据段,开始解析====>");
+            if (mCDRElementLongSparseArray.size() <= 0) {
+                LogUtil.d(TAG, "接收到元素表数据段,但程序启动后还未成功解析过配置表,等待接收解析配置表,暂不解析数据段直接丢弃.");
                 return;
             }
 
-            CopyIndex parseIndex = new CopyIndex(4);
+            CopyIndex lCopyIndex = new CopyIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1);//下标先偏移到 86位置 之后,再开始做解析工作
 
-            int table_id = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
-            if (table_id != (byte) 0x86) {
-                LogUtil.e(TAG, "元素表表头不符！退出元素表解析操作。");
-                return;         //根本就不是配置表，丢掉配置表Buffer
-            }
-
-            int version_number = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
-            if (version_number < 0) {
-                LogUtil.e(TAG, "元素表版本号为负！退出元素表解析操作。");
-                return;
-            } else if (sVersionNumberInConfigTable != version_number) {
-                LogUtil.e(TAG, "接收到的元素表版本号与配置表版本号不一致，退出元素表解析工作。");
+            int version_number = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
+            if (version_number != sVersionNumberInConfigTable) {
+                LogUtil.e(TAG, MessageFormat.format("接收到的元素表中解析出 版本号 与配置表中解出的版本号不一致,退出元素表解析工作.{0}!={1}", version_number, sVersionNumberInConfigTable));
                 return;
             }
 
-            int section_length = arrayhelpers.GetInt16(sectionBuffer, parseIndex);
-            if (section_length < (2 + 2 + 4 + 1 + 1 + 4 + 4)) {
-                LogUtil.e(TAG, "元素表段长度不够，退出元素表解析操作。");
+            int section_length = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
+            if (section_length <= (2 + 2 + 4 + 1 + 1 + 4 + 4)) {
+                LogUtil.e(TAG, MessageFormat.format("接收到的元素表段长度不足 2 + 2 + 4 + 1 + 1 + 4 + 4 = 18,退出元素表解析操作:{0}", stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
                 return;
             }
 
-            int section_number = arrayhelpers.GetInt16(sectionBuffer, parseIndex);
+            int section_number = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
             if (section_number < 0) {
-                LogUtil.e(TAG, "元素表当前段号小于0，退出元素表解析操作。");
+                LogUtil.e(TAG, "接收到的元素表中解析出 当前段号 小于0,退出元素表解析操作.");
                 return;
             }
-            LogUtil.d(TAG, MessageFormat.format("段号-->：{0}", section_number));
 
-            if ((65 <= section_number) && (section_number <= 69)) {
-                LogUtil.d(TAG, MessageFormat.format("-------》段号：{0} [65,69]净荷数据：{1}", section_number, stringhelpers.bytesToHexString(sectionBuffer).toUpperCase()));
-            }
-
-            int section_count = arrayhelpers.GetInt16(sectionBuffer, parseIndex);
+            int section_count = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
             if (section_count < 0) {
-                LogUtil.e(TAG, "元素表中解析出段的数量小于0，退出元素表解析操作。");
+                LogUtil.e(TAG, "接收到的元素表中解析出 段的数量 小于0，退出元素表解析操作.");
                 return;
             }
             if (section_number >= section_count) {
-                LogUtil.e(TAG, "元素表中解析出段号大于等于段数量，退出元素表解析操作。");
+                LogUtil.e(TAG, "接收到的元素表中解析出 段号 大于等于 段数量,退出元素表解析操作.");
                 return;
             }
 
-            long element_guid = arrayhelpers.GetInt32(sectionBuffer, parseIndex);
+            long element_guid = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);
             if (element_guid < 0) {
-                LogUtil.e(TAG, "元素表解析出元素guid小于0，退出元素表解析操作。");
+                LogUtil.e(TAG, MessageFormat.format("接收到的元素表中解析出 元素表解析出元素guid小于0,退出元素表解析操作.GUID:{0}元素段:{1}", element_guid, stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
                 return;
             }
-            if (mCDRElementLongSparseArray.indexOfKey(element_guid) < 0) {                             //解析出的配置表中 没有要接收 当前GUID 的文件
-                LogUtil.d(TAG, "收到 新版本的数据段 但是没有收到 新版本的配置表，不做解析！");
-                return;
-            }
+//            if (mCDRElementLongSparseArray.indexOfKey(element_guid) < 0) {//FIXME 前面已经有 version_number 过滤条件
+//                LogUtil.d(TAG, "收到 新版本的数据段 但是没有收到 新版本的配置表，不做解析！");
+//                return;
+//            }
 
             List<Integer> sectionsNumberList = null;
             CDRElement cdrElement = mCDRElementLongSparseArray.get(element_guid);        //根据 元素GUID 获取元素段
@@ -530,36 +517,36 @@ public final class LongRunningUDPService extends Service {
             if (sectionsNumberList != null) {
                 LogUtil.d(TAG, MessageFormat.format("段号-->列表Size：{0} 段号-->列表：{1}", sectionsNumberList.size(), sectionsNumberList));
             }
-            int element_type = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
+            int element_type = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
             if (element_type < 0) {
                 LogUtil.d(TAG, "元素表解析出元素类型小于0，退出元素表解析操作！");
                 return;
             }
 
-            int element_format = arrayhelpers.GetInt8(sectionBuffer, parseIndex);
+            int element_format = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
             if (element_format < 0) {
                 LogUtil.d(TAG, "元素表解析出元素格式小于0，退出元素表解析操作！");
                 return;
             }
 
-            int section_data_length = arrayhelpers.GetInt32(sectionBuffer, parseIndex);
+            int section_data_length = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);
             if ((section_data_length <= 0) || (section_data_length > 998)) {
                 LogUtil.d(TAG, "元素表解析出元素大小不符合要求(0,998]，退出元素表解析操作！");
                 return;
             }
-            byte[] section_data = arrayhelpers.GetBytes(sectionBuffer, section_data_length, parseIndex);
+            byte[] section_data = arrayhelpers.GetBytes(sectionBuffer, section_data_length, lCopyIndex);
             if (section_data.length <= 0) {
                 LogUtil.d(TAG, "元素表解析出元素数据长度为负，退出元素表解析操作！");
                 return;
             }
 
             //获取CRCBuffer
-            parseIndex.Reset();
-            parseIndex.AddIndex(4 + 4);
-            byte[] CRCBuffer = arrayhelpers.GetBytes(sectionBuffer, section_length - 4, parseIndex);
+            lCopyIndex.Reset();
+            lCopyIndex.AddIndex(4 + 4);
+            byte[] CRCBuffer = arrayhelpers.GetBytes(sectionBuffer, section_length - 4, lCopyIndex);
             int calcCRC = calculateCRC(CRCBuffer);
 
-            int crc = arrayhelpers.GetInt32(sectionBuffer, parseIndex);
+            int crc = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);
 
             //校验CRC
             if (calcCRC != crc) {
@@ -615,7 +602,6 @@ public final class LongRunningUDPService extends Service {
             sVersionNumberInConfigTable = -1;
         }
 
-        private static final CopyIndex CRC_COPY_INDEX = new CopyIndex(0);
 
         /**
          * 自定义的计算CRC的方法
@@ -624,9 +610,9 @@ public final class LongRunningUDPService extends Service {
          * @return 自定义的CRC值
          */
         private static int calculateCRC(@NotNull byte[] bufferToCalcCRC) {
-            LogUtil.d(TAG, MessageFormat.format("BufferToCalcCRC{0}AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t", stringhelpers.bytesToHexString(bufferToCalcCRC).toUpperCase()));
+            LogUtil.d(TAG, MessageFormat.format("BufferToCalcCRC{0}AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t", stringhelpers.bytesToHexString(bufferToCalcCRC).toUpperCase(Locale.getDefault())));
             byte[] crcBuffer = {(byte) 0x12, (byte) 0x34, bufferToCalcCRC[0], bufferToCalcCRC[1]};
-            return arrayhelpers.GetInt32(crcBuffer, CRC_COPY_INDEX);
+            return arrayhelpers.GetInt32(crcBuffer, new CopyIndex(0));
         }
 
         /**
