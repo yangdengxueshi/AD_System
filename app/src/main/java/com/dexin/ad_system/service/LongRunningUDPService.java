@@ -332,7 +332,7 @@ public final class LongRunningUDPService extends Service {
                     parseConfigTable(front1024OfCurrentPayloadArray);
                     break;
                 case AppConfig.ELEMENT_TABLE_DISCRIMINATOR://TODO 获得元素表,开始解析元素表 front1024OfCurrentPayloadArray 一定是00 88 88 xx 86开头
-                    parseSectionData(front1024OfCurrentPayloadArray);
+//                    parseSectionData(front1024OfCurrentPayloadArray);
                     break;
                 default:
             }
@@ -345,6 +345,9 @@ public final class LongRunningUDPService extends Service {
         private static final Timer mTimer = new Timer();//定时器
         private static final String[] elementFormat = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};      //.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
 
+        private static long sElementGuid;//元素GUID
+        private static final List<Long> sElementGuidList = new ArrayList<>();//元素GUID列表
+
         /**
          * 解析配置表(table_id 一定是 0x87)函数(传递过来的参数一定就是 008888 开头的1024长度 数组) FIXME 相同版本号的配置表在解析成功后我们不再解析
          *
@@ -352,101 +355,77 @@ public final class LongRunningUDPService extends Service {
          */
         private static void parseConfigTable(byte[] configTableBuffer) {
             LogUtil.e(TAG, "收到配置表数据段,开始解析====>");
-//            if ((configTableBuffer == null) || (configTableBuffer.length != AppConfig.CUS_DATA_SIZE)) {
-//                LogUtil.e(TAG, "配置表数据段为null 或 配置表数据段长度不等于1024,退出配置表解析操作。");
-//                return;
-//            }
+            LogUtil.d(TAG, MessageFormat.format("配置表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(configTableBuffer).toUpperCase(Locale.getDefault())));
 
             CopyIndex lCopyIndex = new CopyIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1);//下标先偏移到 87位置 之后,再开始做解析工作
             int version_number = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);          //2.配置表：“版本号”
-            if (version_number < 0) {
-                LogUtil.e(TAG, "根据配置表中解析出 版本号 为负,退出配置表解析逻辑!");
-                return;
-            } else {
-                if (sVersionNumberInConfigTable != version_number) {//通过配置表解出服务端发送的数据 有变化
-                    sVersionNumberInConfigTable = version_number;//更新接收到的配置表版本号
-                    clearMediaListAndDeleteMediaFolder();//FIXME 先是发送安卓广播 清空分类文件集合（接着根据广播设置UI）    ；   然后  删除本程序的媒体文件夹下的文件
-                    sGuidList.clear();//清空原guidList,表示是要重新接收新文件
-                } else {//根据配置表解出的是相同版本号,停止解析
-                    LogUtil.e(TAG, "已经成功解析过相同版本号的配置表数据段,退出当前解析!");
-                    return;
-                }
-            }
-
+//            if (sVersionNumberInConfigTable != version_number) {//通过配置表解出服务端发送的数据 有变化---------------------------------------TODO 应该放到最后----------------------------------
+//                sVersionNumberInConfigTable = version_number;//更新接收到的配置表版本号
+//                clearMediaListAndDeleteMediaFolder();//FIXME 先是发送安卓广播 清空分类文件集合（接着根据广播设置UI）    ；   然后  删除本程序的媒体文件夹下的文件
+//                sGuidList.clear();//清空原guidList,表示是要重新接收新文件
+//            } else {//根据配置表解出的是相同版本号,停止解析
+//                LogUtil.e(TAG, "已经成功解析过相同版本号的配置表数据段,退出当前解析!");
+//                return;
+//            }
             int section_length = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);         //3.配置表：“段长度”
-            if (section_length < (2 + 2 + 1 + 1 + 1 + 4)) {
-                LogUtil.e(TAG, "根据配置表中解析出 段长度 不足2 + 2 + 1 + 1 + 1 + 4 = 11,退出配置表解析操作.");
-                clearGuidListAndResetVersionNumber();
+            if (section_length != (AppConfig.CUS_DATA_SIZE - AppConfig.TABLE_DISCRIMINATOR_INDEX - 1 - 1 - 2)) {//段长度必定是 1024 - 4 - 1 - 1 - 2 = 1016
+                LogUtil.e(TAG, "根据配置表中解析出 段长度 不是1024 - 4 - 1 - 1 - 2 = 1016,退出配置表解析操作!");
                 return;
             }
-
             int section_number = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);         //4.配置表：“当前段号”
-            if (section_number < 0) {
-                LogUtil.d(TAG, "根据配置表中解析出 当前段号 小于0,退出配置表解析操作.");
-                clearGuidListAndResetVersionNumber();
-                return;
-            }
-
+//            if (section_number != 0) {
+//                LogUtil.e(TAG, "根据配置表中解析出 当前段号 不是0x 0000,退出配置表解析操作!");
+//                return;
+//            }
             int section_count = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);          //5.配置表：“段数量”
-            if (section_count < 0) {
-                LogUtil.d(TAG, "根据配置表中解析出 段数量 小于0,退出配置表解析操作.");
-                clearGuidListAndResetVersionNumber();
+//            if (section_count != 1) {
+//                LogUtil.e(TAG, "根据配置表中解析出 段数量 不是0x 0001,退出配置表解析操作!");
+//                return;
+//            }
+            lCopyIndex.AddIndex(1 + 1);//保留
+            int element_count = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);           //6.配置表：“元素个数”s
+            if (element_count == 0) {
+                LogUtil.e(TAG, "根据配置表中解析出 元素个数 为0,没有必要接收数据,退出配置表解析操作!");
                 return;
             }
-
-            lCopyIndex.AddIndex(1);//保留
-            lCopyIndex.AddIndex(1);//保留
-
-            int element_count = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);           //6.配置表：“元素个数”
-            if (element_count < 0) {
-                LogUtil.d(TAG, "根据配置表解析出 元素个数 小于0,退出配置表解析操作.");
-                clearGuidListAndResetVersionNumber();
-                return;
-            }
-
-            List<Long> guid_list = new ArrayList<>();//TODO 根据配置表解析出要接收那些文件:guid 集合(为了便于判断,将 "有效4字节的元素id数组" 转换成集合)
+            sElementGuidList.clear();
             for (int i = 0; i < element_count; i++) {
-                long guid = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);
-                if (guid_list.contains(guid)) {
-                    lCopyIndex.AddIndex(1);
-                    lCopyIndex.AddIndex(1);
-                    lCopyIndex.AddIndex(1);
-                    lCopyIndex.AddIndex(1);
-                } else {
-                    int element_type = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);
-                    int element_format = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);
-                    lCopyIndex.AddIndex(1);
-                    lCopyIndex.AddIndex(1);
-                    guid_list.add(guid);
-                }
+                sElementGuid = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);
+                if (!sElementGuidList.contains(sElementGuid)) sElementGuidList.add(sElementGuid);
+                lCopyIndex.AddIndex(1 + 1 + 1 + 1);
+            }
+            if (element_count != sElementGuidList.size()) {
+                LogUtil.e(TAG, "根据配置表中解析出 元素个数 不等于for循环中获取的 元素个数,退出配置表解析操作!");
+                return;
             }
 
             //校验CRC
             lCopyIndex.Reset();
             lCopyIndex.AddIndex((AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2));
-            int calcCRC = calculateCRC(arrayhelpers.GetBytes(configTableBuffer, section_length - 4, lCopyIndex));
-            int crc = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);             //TODO CRC 放到此处获取是因为： for循环之后有大量填充数据
-            if (calcCRC != crc) {                           //CRC不相等，表示数据不对
-                LogUtil.e(TAG, MessageFormat.format("根据配置表校验CRC失败:{0}", stringhelpers.bytesToHexString(configTableBuffer).toUpperCase()));
-                clearGuidListAndResetVersionNumber();
+            int calcCRC = calculateCRC(arrayhelpers.GetBytes(configTableBuffer, section_length - 4, lCopyIndex));//计算CRC
+            int readCRC = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);//读取CRC
+            if (calcCRC != readCRC) {//两处CRC不一致,校验失败
+                LogUtil.e(TAG, "根据配置表中解析出 CRC 与 根据配置表中读出 CRC 不一致,退出配置表解析操作!");
                 return;
             }
 
-            if (element_count != guid_list.size()) {
-                LogUtil.e(TAG, "根据配置表解析所得文件数量不等于for循环中获取的文件数量.");
-                clearGuidListAndResetVersionNumber();
-                return;
-            } else {
-                mCDRElementLongSparseArray.clear();
-                sGuidList = guid_list;
-                for (long guid : sGuidList) {
-                    LogUtil.i(TAG, MessageFormat.format("文件guid:{0}", guid));
-                    CDRElement cdrElement = new CDRElement();
-                    cdrElement.setVersionNumber(version_number);
-                    mCDRElementLongSparseArray.put(guid, cdrElement);
-                }
+            mCDRElementLongSparseArray.clear();
+            sGuidList = sElementGuidList;
+            for (long guid : sGuidList) {
+                LogUtil.i(TAG, MessageFormat.format("文件GUID:{0}", guid));
+                CDRElement cdrElement = new CDRElement();
+                cdrElement.setVersionNumber(version_number);
+                mCDRElementLongSparseArray.put(guid, cdrElement);
             }
-            LogUtil.e(TAG, MessageFormat.format("解析配置表成功!\t\t{0}={1}?", guid_list.size(), element_count));
+
+            if (sVersionNumberInConfigTable != version_number) {//通过配置表解出服务端发送的数据 有变化---------------------------------------TODO 应该放到最后----------------------------------
+                sVersionNumberInConfigTable = version_number;//更新接收到的配置表版本号
+                clearMediaListAndDeleteMediaFolder();//FIXME 先是发送安卓广播 清空分类文件集合（接着根据广播设置UI）    ；   然后  删除本程序的媒体文件夹下的文件
+                sGuidList.clear();//清空原guidList,表示是要重新接收新文件
+                LogUtil.e(TAG, MessageFormat.format("解析配置表成功!\t\t{0}={1}?", sElementGuidList.size(), element_count));
+            } else {//根据配置表解出的是相同版本号,停止解析
+                LogUtil.e(TAG, "已经成功解析过相同版本号的配置表数据段,退出当前解析!");
+            }
         }
 
         /**
@@ -594,14 +573,7 @@ public final class LongRunningUDPService extends Service {
             }
         }
 
-        /**
-         * 清空guid集合 并 重置版本号
-         */
-        private static void clearGuidListAndResetVersionNumber() {
-            sGuidList.clear();
-            sVersionNumberInConfigTable = -1;
-        }
-
+        private static final CopyIndex sCopyIndex = new CopyIndex(0);
 
         /**
          * 自定义的计算CRC的方法
@@ -610,9 +582,9 @@ public final class LongRunningUDPService extends Service {
          * @return 自定义的CRC值
          */
         private static int calculateCRC(@NotNull byte[] bufferToCalcCRC) {
-            LogUtil.d(TAG, MessageFormat.format("BufferToCalcCRC{0}AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t", stringhelpers.bytesToHexString(bufferToCalcCRC).toUpperCase(Locale.getDefault())));
             byte[] crcBuffer = {(byte) 0x12, (byte) 0x34, bufferToCalcCRC[0], bufferToCalcCRC[1]};
-            return arrayhelpers.GetInt32(crcBuffer, new CopyIndex(0));
+            sCopyIndex.Reset();
+            return arrayhelpers.GetInt32(crcBuffer, sCopyIndex);
         }
 
         /**
