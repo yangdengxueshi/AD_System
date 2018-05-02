@@ -29,7 +29,6 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.text.MessageFormat;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -340,13 +339,9 @@ public final class LongRunningUDPService extends Service {
 
 
         private static int sVersionNumberInConfigTable = -1;//接收到的配置表中解析出的 版本号
-        private static List<Long> sGuidList = new ArrayList<>();                     //配置表：“元素guid数组”    文件数据模型（guid）
         private static final LongSparseArray<CDRElement> mCDRElementLongSparseArray = new LongSparseArray<>();       //TODO 存放 GUID 和 元素项
         private static final Timer mTimer = new Timer();//定时器
         private static final String[] elementFormat = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};      //.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
-
-        private static long sElementGuid;//元素GUID
-        private static final List<Long> sElementGuidList = new ArrayList<>();//元素GUID列表
 
         /**
          * 解析配置表(table_id 一定是 0x87)函数(传递过来的参数一定就是 008888 开头的1024长度 数组) FIXME 相同版本号的配置表在解析成功后我们不再解析
@@ -359,43 +354,46 @@ public final class LongRunningUDPService extends Service {
 
             CopyIndex lCopyIndex = new CopyIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1);//下标先偏移到 87位置 之后,再开始做解析工作
             int version_number = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);          //2.配置表：“版本号”
-//            if (sVersionNumberInConfigTable != version_number) {//通过配置表解出服务端发送的数据 有变化---------------------------------------TODO 应该放到最后----------------------------------
-//                sVersionNumberInConfigTable = version_number;//更新接收到的配置表版本号
-//                clearMediaListAndDeleteMediaFolder();//FIXME 先是发送安卓广播 清空分类文件集合（接着根据广播设置UI）    ；   然后  删除本程序的媒体文件夹下的文件
-//                sGuidList.clear();//清空原guidList,表示是要重新接收新文件
-//            } else {//根据配置表解出的是相同版本号,停止解析
-//                LogUtil.e(TAG, "已经成功解析过相同版本号的配置表数据段,退出当前解析!");
-//                return;
-//            }
+            if (sVersionNumberInConfigTable != version_number) {//通过配置表解出服务端发送的数据 有变化
+                clearMediaListAndDeleteMediaFolder();//FIXME 发送安卓广播 清空分类文件集合根据广播设置UI    ；   删除本程序的媒体文件夹下的文件
+            } else {
+                LogUtil.e(TAG, "已经成功解析过相同版本号的配置表数据段,退出当前解析!");
+                return;
+            }
             int section_length = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);         //3.配置表：“段长度”
             if (section_length != (AppConfig.CUS_DATA_SIZE - AppConfig.TABLE_DISCRIMINATOR_INDEX - 1 - 1 - 2)) {//段长度必定是 1024 - 4 - 1 - 1 - 2 = 1016
                 LogUtil.e(TAG, "根据配置表中解析出 段长度 不是1024 - 4 - 1 - 1 - 2 = 1016,退出配置表解析操作!");
                 return;
             }
             int section_number = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);         //4.配置表：“当前段号”
-//            if (section_number != 0) {
-//                LogUtil.e(TAG, "根据配置表中解析出 当前段号 不是0x 0000,退出配置表解析操作!");
-//                return;
-//            }
+//            if (section_number != 0) {                LogUtil.e(TAG, "根据配置表中解析出 当前段号 不是0x 0000,退出配置表解析操作!");                return;            }
             int section_count = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);          //5.配置表：“段数量”
-//            if (section_count != 1) {
-//                LogUtil.e(TAG, "根据配置表中解析出 段数量 不是0x 0001,退出配置表解析操作!");
-//                return;
-//            }
-            lCopyIndex.AddIndex(1 + 1);//保留
-            int element_count = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);           //6.配置表：“元素个数”s
-            if (element_count == 0) {
-                LogUtil.e(TAG, "根据配置表中解析出 元素个数 为0,没有必要接收数据,退出配置表解析操作!");
+//            if (section_count != 1) {                LogUtil.e(TAG, "根据配置表中解析出 段数量 不是0x 0001,退出配置表解析操作!");                return;            }
+            if (section_number >= section_count) {
+                LogUtil.e(TAG, "根据配置表中解析出 当前段号 >= 段数量,退出配置表解析操作!");
                 return;
             }
-            sElementGuidList.clear();
+            lCopyIndex.AddIndex(1 + 1);//保留
+            int element_count = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);           //6.配置表：“元素个数”s
+            if (element_count <= 0) {
+                LogUtil.e(TAG, "根据配置表中解析出 元素个数 <=0,没有必要接收数据,退出配置表解析操作!");
+                return;
+            }
+            long lElementGuid;
+            mCDRElementLongSparseArray.clear();
             for (int i = 0; i < element_count; i++) {
-                sElementGuid = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);
-                if (!sElementGuidList.contains(sElementGuid)) sElementGuidList.add(sElementGuid);
+                lElementGuid = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);
+                LogUtil.e(TAG, MessageFormat.format("根据配置表中解析出 元素GUID:{0}", lElementGuid));
+                if (mCDRElementLongSparseArray.indexOfKey(lElementGuid) < 0) {
+                    CDRElement cdrElement = new CDRElement();
+                    cdrElement.setVersionNumber(version_number);
+                    mCDRElementLongSparseArray.put(lElementGuid, cdrElement);
+                }
                 lCopyIndex.AddIndex(1 + 1 + 1 + 1);
             }
-            if (element_count != sElementGuidList.size()) {
+            if (element_count != mCDRElementLongSparseArray.size()) {
                 LogUtil.e(TAG, "根据配置表中解析出 元素个数 不等于for循环中获取的 元素个数,退出配置表解析操作!");
+                mCDRElementLongSparseArray.clear();
                 return;
             }
 
@@ -406,26 +404,11 @@ public final class LongRunningUDPService extends Service {
             int readCRC = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);//读取CRC
             if (calcCRC != readCRC) {//两处CRC不一致,校验失败
                 LogUtil.e(TAG, "根据配置表中解析出 CRC 与 根据配置表中读出 CRC 不一致,退出配置表解析操作!");
+                mCDRElementLongSparseArray.clear();
                 return;
             }
-
-            mCDRElementLongSparseArray.clear();
-            sGuidList = sElementGuidList;
-            for (long guid : sGuidList) {
-                LogUtil.i(TAG, MessageFormat.format("文件GUID:{0}", guid));
-                CDRElement cdrElement = new CDRElement();
-                cdrElement.setVersionNumber(version_number);
-                mCDRElementLongSparseArray.put(guid, cdrElement);
-            }
-
-            if (sVersionNumberInConfigTable != version_number) {//通过配置表解出服务端发送的数据 有变化---------------------------------------TODO 应该放到最后----------------------------------
-                sVersionNumberInConfigTable = version_number;//更新接收到的配置表版本号
-                clearMediaListAndDeleteMediaFolder();//FIXME 先是发送安卓广播 清空分类文件集合（接着根据广播设置UI）    ；   然后  删除本程序的媒体文件夹下的文件
-                sGuidList.clear();//清空原guidList,表示是要重新接收新文件
-                LogUtil.e(TAG, MessageFormat.format("解析配置表成功!\t\t{0}={1}?", sElementGuidList.size(), element_count));
-            } else {//根据配置表解出的是相同版本号,停止解析
-                LogUtil.e(TAG, "已经成功解析过相同版本号的配置表数据段,退出当前解析!");
-            }
+            sVersionNumberInConfigTable = version_number;//FIXME 在前面全部解析通过后 更新接收到的配置表版本号
+            LogUtil.e(TAG, "解析配置表成功!");
         }
 
         /**
