@@ -123,7 +123,7 @@ public final class LongRunningUDPService extends Service {
 //                        mDatagramSocket.setSoTimeout(8000);
                         mDatagramSocket.receive(mDatagramPacket);//将单播套接字收到的UDP数据包存放于datagramPacket中(会阻塞)
                         mUdpDataContainer = mDatagramPacket.getData();//UDP数据包
-//                        LogUtil.d(TAG, "UDP原始数据包AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
+//                        LogUtil.d(TAG, "UDP原始数据包AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase(Locale.getDefault()));
                         if ((mUdpDataContainer != null) && (mUdpDataContainer.length > 0)) {
                             mUdpDataContainer = parseUDPPacketToPayload(mUdpDataContainer);//解析UDP数据包后获得UDP净荷
 //                            LogUtil.d(TAG, "TS净荷包     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
@@ -350,13 +350,11 @@ public final class LongRunningUDPService extends Service {
          */
         private static void parseConfigTable(byte[] configTableBuffer) {
             LogUtil.e(TAG, "收到配置表数据段,开始解析====>");
-            LogUtil.d(TAG, MessageFormat.format("配置表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(configTableBuffer).toUpperCase(Locale.getDefault())));
+//            LogUtil.d(TAG, MessageFormat.format("配置表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(configTableBuffer).toUpperCase(Locale.getDefault())));
 
             CopyIndex lCopyIndex = new CopyIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1);//下标先偏移到 87位置 之后,再开始做解析工作
             int version_number = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);          //2.配置表：“版本号”
-            if (sVersionNumberInConfigTable != version_number) {//通过配置表解出服务端发送的数据 有变化
-                clearMediaListAndDeleteMediaFolder();//FIXME 发送安卓广播 清空分类文件集合根据广播设置UI    ；   删除本程序的媒体文件夹下的文件
-            } else {
+            if (sVersionNumberInConfigTable == version_number) {
                 LogUtil.e(TAG, "已经成功解析过相同版本号的配置表数据段,退出当前解析!");
                 return;
             }
@@ -379,6 +377,19 @@ public final class LongRunningUDPService extends Service {
                 LogUtil.e(TAG, "根据配置表中解析出 元素个数 <=0,没有必要接收数据,退出配置表解析操作!");
                 return;
             }
+            //校验CRC
+            lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2);
+            int calcCRC = calculateCRC(arrayhelpers.GetBytes(configTableBuffer, section_length - 4, lCopyIndex));//计算CRC
+            int readCRC = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);//读取CRC
+            if (calcCRC != readCRC) {//两处CRC不一致,校验失败
+                LogUtil.e(TAG, "根据配置表中解析出 CRC 与 根据配置表中读出 CRC 不一致,退出配置表解析操作!");
+                return;
+            }
+            //一切条件都满足:先更新版本号,接着向Map中写入"待接收的元素信息"从而开始解析"元素表"
+            sVersionNumberInConfigTable = version_number;//FIXME 在前面全部解析通过后 更新接收到的配置表版本号
+            clearMediaListAndDeleteMediaFolder();//FIXME 发送安卓广播 清空分类文件集合根据广播设置UI    ；   删除本程序的媒体文件夹下的文件
+
+            lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 1 + 1 + 1);
             long lElementGuid;
             mCDRElementLongSparseArray.clear();
             for (int i = 0; i < element_count; i++) {
@@ -390,24 +401,8 @@ public final class LongRunningUDPService extends Service {
                     mCDRElementLongSparseArray.put(lElementGuid, cdrElement);
                 }
                 lCopyIndex.AddIndex(1 + 1 + 1 + 1);
-            }
-            if (element_count != mCDRElementLongSparseArray.size()) {
-                LogUtil.e(TAG, "根据配置表中解析出 元素个数 不等于for循环中获取的 元素个数,退出配置表解析操作!");
-                mCDRElementLongSparseArray.clear();
-                return;
-            }
+            }//不用判断 element_count == mCDRElementLongSparseArray.size() ?
 
-            //校验CRC
-            lCopyIndex.Reset();
-            lCopyIndex.AddIndex((AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2));
-            int calcCRC = calculateCRC(arrayhelpers.GetBytes(configTableBuffer, section_length - 4, lCopyIndex));//计算CRC
-            int readCRC = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);//读取CRC
-            if (calcCRC != readCRC) {//两处CRC不一致,校验失败
-                LogUtil.e(TAG, "根据配置表中解析出 CRC 与 根据配置表中读出 CRC 不一致,退出配置表解析操作!");
-                mCDRElementLongSparseArray.clear();
-                return;
-            }
-            sVersionNumberInConfigTable = version_number;//FIXME 在前面全部解析通过后 更新接收到的配置表版本号
             LogUtil.e(TAG, "解析配置表成功!");
         }
 
