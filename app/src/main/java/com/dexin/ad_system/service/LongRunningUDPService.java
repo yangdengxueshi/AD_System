@@ -36,8 +36,8 @@ import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 
 public final class LongRunningUDPService extends Service {
-    private PayloadProducerThread mPayloadProducerThread;
-    private static final ArrayBlockingQueue<byte[]> mPayloadArrayBlockingQueue = new ArrayBlockingQueue<>(AppConfig.ARRAY_BLOCKING_QUEUE_CAPACITY);//存放"(0~6)*184净荷"的阻塞队列
+    private UDPPackProducerThread mUDPPackProducerThread;
+    private static final ArrayBlockingQueue<byte[]> mUDPPackArrayBlockingQueue = new ArrayBlockingQueue<>(AppConfig.ARRAY_BLOCKING_QUEUE_CAPACITY);//存放"原始UDP数据报"的阻塞队列
     private PayloadConsumerThread mPayloadConsumerThread;
     private static final ArrayBlockingQueue<byte[]> mCusDataArrayBlockingQueue = new ArrayBlockingQueue<>(AppConfig.ARRAY_BLOCKING_QUEUE_CAPACITY);//存放"自定义1024数据"的阻塞队列
     private CusDataConsumerThread mCusDataConsumerThread;
@@ -61,14 +61,14 @@ public final class LongRunningUDPService extends Service {
                 .build()
         );
 
-        if (mPayloadProducerThread == null) mPayloadProducerThread = new PayloadProducerThread();
+        if (mUDPPackProducerThread == null) mUDPPackProducerThread = new UDPPackProducerThread();
         if (mPayloadConsumerThread == null) mPayloadConsumerThread = new PayloadConsumerThread();
         if (mCusDataConsumerThread == null) mCusDataConsumerThread = new CusDataConsumerThread();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        mPayloadProducerThread.start();
+        mUDPPackProducerThread.start();
         mPayloadConsumerThread.start();
         mCusDataConsumerThread.start();
         return super.onStartCommand(intent, flags, startId);
@@ -76,11 +76,11 @@ public final class LongRunningUDPService extends Service {
 
     @Override
     public void onDestroy() {
-        if (mPayloadProducerThread != null) {
-            mPayloadProducerThread.stopPayloadProducerThreadSafely();
-            mPayloadProducerThread = null;
+        if (mUDPPackProducerThread != null) {
+            mUDPPackProducerThread.stopPayloadProducerThreadSafely();
+            mUDPPackProducerThread = null;
         }
-        mPayloadArrayBlockingQueue.clear();
+        mUDPPackArrayBlockingQueue.clear();
         if (mPayloadConsumerThread != null) {
             mPayloadConsumerThread.stopPayloadConsumerThreadSafely();
             mPayloadConsumerThread = null;
@@ -95,13 +95,13 @@ public final class LongRunningUDPService extends Service {
 
     /**
      * -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-     * ------------------------------------------------------------------------------TODO 净荷生产者线程------------------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------TODO UDP包生产者线程-----------------------------------------------------------------------------------------
      * ------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓------------------------------------------------------------------------------------------
      */
-    private static final class PayloadProducerThread extends Thread {
+    private static final class UDPPackProducerThread extends Thread {
         private static final String TAG = "TAG_PayloadProducerThread";
         private volatile boolean isNeedReceiveUDP;//是否需要接收UDP数据包（没有启动的时候不需要接收）
-        private byte[] mUdpDataContainer;
+        private byte[] mUdpPackContainer;
         private DatagramSocket mDatagramSocket;//单播套接字
         private DatagramPacket mDatagramPacket;//单播数据报
 
@@ -110,21 +110,21 @@ public final class LongRunningUDPService extends Service {
             LogUtil.e(TAG, "################################################ 开始接收CDR_Wifi_UDP数据包 ##################################################");
             isNeedReceiveUDP = true;//标志"重新开始接收CDR_Wifi_UDP数据包"
             try {
-                if (mUdpDataContainer == null) mUdpDataContainer = new byte[AppConfig.UDP_PACKET_SIZE];//1460包长
+                if (mUdpPackContainer == null) mUdpPackContainer = new byte[AppConfig.UDP_PACKET_SIZE];//1460包长
                 if (mDatagramSocket == null) {
                     mDatagramSocket = new DatagramSocket(null);
                     mDatagramSocket.setReuseAddress(true);//地址复用
                     mDatagramSocket.bind(new InetSocketAddress(AppConfig.PORT));//绑定端口
                 }
-                if (mDatagramPacket == null) mDatagramPacket = new DatagramPacket(mUdpDataContainer, mUdpDataContainer.length);//建立一个指定缓冲区大小的数据包
+                if (mDatagramPacket == null) mDatagramPacket = new DatagramPacket(mUdpPackContainer, mUdpPackContainer.length);//建立一个指定缓冲区大小的数据包
                 while (isNeedReceiveUDP) {
                     try {
 //                        mDatagramSocket.setSoTimeout(8000);
                         mDatagramSocket.receive(mDatagramPacket);//将单播套接字收到的UDP数据包存放于datagramPacket中(会阻塞)
-                        mUdpDataContainer = mDatagramPacket.getData();//UDP数据包
-//                        LogUtil.d(TAG, MessageFormat.format("UDP原始数据包AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase(Locale.getDefault())));
-                        if ((mUdpDataContainer != null) && (mUdpDataContainer.length > 0)) {
-                            mPayloadArrayBlockingQueue.put(mUdpDataContainer);//FIXME 是否应该考虑将过滤净荷的逻辑放于出队时
+                        mUdpPackContainer = mDatagramPacket.getData();//UDP数据包
+//                        LogUtil.d(TAG, MessageFormat.format("UDP原始数据包AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase(Locale.getDefault())));
+                        if ((mUdpPackContainer != null) && (mUdpPackContainer.length > 0)) {
+                            mUDPPackArrayBlockingQueue.put(mUdpPackContainer);//FIXME 是否应该考虑将过滤净荷的逻辑放于出队时
                         }
                     } catch (Exception e) {
                         Logger.t(TAG).e(e, "run: ");
@@ -143,7 +143,7 @@ public final class LongRunningUDPService extends Service {
                     mDatagramPacket.setLength(0);
                     mDatagramPacket = null;
                 }
-                mUdpDataContainer = null;//必须置null
+                mUdpPackContainer = null;//必须置null
             }
         }
 
@@ -152,7 +152,7 @@ public final class LongRunningUDPService extends Service {
          */
         private void stopPayloadProducerThreadSafely() {
             isNeedReceiveUDP = false;
-            mPayloadArrayBlockingQueue.clear();
+            mUDPPackArrayBlockingQueue.clear();
             LogUtil.e(TAG, "##################################### CDRWifiReceive 服务关闭,结束接收CDR_Wifi_UDP数据包 #######################################");
         }
     }
@@ -194,7 +194,7 @@ public final class LongRunningUDPService extends Service {
          */
         private void stopPayloadConsumerThreadSafely() {
             isNeedParsePayloadData = false;
-            mPayloadArrayBlockingQueue.clear();
+            mUDPPackArrayBlockingQueue.clear();
             mCusDataArrayBlockingQueue.clear();
             LogUtil.e(TAG, "################################################ 停止解析净荷数据 ################################################");
         }
@@ -206,8 +206,8 @@ public final class LongRunningUDPService extends Service {
          */
         private static byte[] getNextValidPayload() {
             try {
-//                            LogUtil.d(TAG, "TS净荷包     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
-                return parseUDPPacketToPayload(mPayloadArrayBlockingQueue.take());//FIXME 遇到队列中没有元素的时候,线程会阻塞
+//                            LogUtil.d(TAG, "TS净荷包     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase());
+                return parseUDPPacketToPayload(mUDPPackArrayBlockingQueue.take());//FIXME 遇到队列中没有元素的时候,线程会阻塞        取出原始UDP包,解析成"(0~6)*184净荷"并返回
             } catch (InterruptedException e) {
                 Logger.t(TAG).e(e, "getNextValidPayload: ");
                 return new byte[0];//上一个return语句会阻塞,不会走到这一步!
