@@ -3,6 +3,7 @@ package com.dexin.ad_system.service;
 import android.app.Service;
 import android.content.Intent;
 import android.graphics.BitmapFactory;
+import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -13,7 +14,7 @@ import com.blankj.utilcode.util.FileUtils;
 import com.dexin.ad_system.R;
 import com.dexin.ad_system.app.AppConfig;
 import com.dexin.ad_system.app.CustomApplication;
-import com.dexin.ad_system.cdr.CDRElement;
+import com.dexin.ad_system.cdr.Element;
 import com.dexin.ad_system.util.LogUtil;
 import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
@@ -32,8 +33,6 @@ import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.ArrayBlockingQueue;
 
 public final class LongRunningUDPService extends Service {
@@ -123,13 +122,9 @@ public final class LongRunningUDPService extends Service {
 //                        mDatagramSocket.setSoTimeout(8000);
                         mDatagramSocket.receive(mDatagramPacket);//将单播套接字收到的UDP数据包存放于datagramPacket中(会阻塞)
                         mUdpDataContainer = mDatagramPacket.getData();//UDP数据包
-//                        LogUtil.d(TAG, "UDP原始数据包AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase(Locale.getDefault()));
+//                        LogUtil.d(TAG, MessageFormat.format("UDP原始数据包AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase(Locale.getDefault())));
                         if ((mUdpDataContainer != null) && (mUdpDataContainer.length > 0)) {
-                            mUdpDataContainer = parseUDPPacketToPayload(mUdpDataContainer);//解析UDP数据包后获得UDP净荷
-//                            LogUtil.d(TAG, "TS净荷包     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
-                            if ((mUdpDataContainer != null) && (mUdpDataContainer.length > 0)) {
-                                mPayloadArrayBlockingQueue.put(mUdpDataContainer);//FIXME 是否应该考虑将过滤净荷的逻辑放于出队时
-                            }
+                            mPayloadArrayBlockingQueue.put(mUdpDataContainer);//FIXME 是否应该考虑将过滤净荷的逻辑放于出队时
                         }
                     } catch (Exception e) {
                         Logger.t(TAG).e(e, "run: ");
@@ -159,52 +154,6 @@ public final class LongRunningUDPService extends Service {
             isNeedReceiveUDP = false;
             mPayloadArrayBlockingQueue.clear();
             LogUtil.e(TAG, "##################################### CDRWifiReceive 服务关闭,结束接收CDR_Wifi_UDP数据包 #######################################");
-        }
-
-        /**
-         * 解析接收到的"原始UDP数据包"进而获得"n个(0~6)TS净荷包"（TS包是顺序排放的），我们只需要 0x86 开头的UDP包(广科院协议)
-         * FIXME 已经"分析数据验证,函数严谨"
-         *
-         * @param udpDataPacket 原始的UDP数据报
-         * @return "n个TS包的净荷"有序拼接起来的字节数组（长度是 n * 184 n∈[0,6]）
-         */
-        @Nullable
-        private static byte[] parseUDPPacketToPayload(byte[] udpDataPacket) {
-//        if (udpDataPacket == null || udpDataPacket.length < (AppConfig.UDP_PACKET_HEADER_SIZE + AppConfig.UDP_PACKET_TAIL_SIZE)) {
-//            LogUtil.d(TAG, "UDP原始数据包为 null 或 长度小于 21+311,数据不符合要求进而被丢弃!");
-//            return null;
-//        } else if (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE) {
-//            LogUtil.i(TAG, "UDP原始数据包长不是1460,原始数据有问题!");
-//        }
-            {//①原始UDP数据正确性检验
-                if ((udpDataPacket == null) || (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE)) {
-                    LogUtil.e(TAG, "UDP原始数据包为 null 或 长度不是1460,数据不符合要求进而被丢弃!");
-                    return null;
-                }
-                if (udpDataPacket[0] != AppConfig.UDP_HEAD_0x86_VALUE) {//这个0x86是广科院的头，注意与自定义 ELEMENT_TABLE_DISCRIMINATOR 区分开   //TODO 5.筛选出 广科院0x86头 UDP数据报,(如果不是0x86开头的UDP包则抛弃掉)
-                    LogUtil.e(TAG, "UDP原始数据包头不是广科院协议头0x86,不符合要求进而被舍弃!");
-                    return null;
-                }
-            }
-
-            int lTsPacketAbandonedCount = 0;//被抛弃的ts包的数量
-            byte[] lTsPayloadBuffer = new byte[AppConfig.TS_PAYLOAD_NO * AppConfig.TS_PAYLOAD_SIZE];//将用于承载TS净荷的字节数组Buffer 6*184
-            CopyIndex lCopyIndex = new CopyIndex(AppConfig.UDP_PACKET_HEADER_SIZE);//TODO 跳过前21字节头;UDP包以 0x86开头,前21字节是协议头(收到后可以删除)，（1460-21-311=1128字节有效）    1128/6=188（每个TS包）
-            byte lTSHead, lTSPid1, lTSPid2;//TODO byte[]     取出当前同步字节，看是否等于0x 47 0F FE xx
-            for (int i = 0; i < AppConfig.TS_PAYLOAD_NO; i++) {//TODO 循环解析一个UDP包中的6个TS包
-                lTSHead = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
-                lTSPid1 = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
-                lTSPid2 = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
-                lCopyIndex.AddIndex(1);//前面已经 +1 +1 +1,现在 +1,跳过每个TS包的0x47前4个字节的协议头
-                if ((lTSHead != AppConfig.TS_HEAD_0x47_VALUE) || ((lTSPid1 & (byte) 0x1F) != (byte) 0x0F) || (lTSPid2 != (byte) 0xFE)) {//三个条件有一个不满足都要将当前ts包抛掉(即不满足TS包协议头)
-                    lCopyIndex.AddIndex(AppConfig.TS_PAYLOAD_SIZE);//TODO TS包以  0x47开头，前4个字节是协议头(0x47 xF FE xx)，其后是184字节净荷     4+184=188
-                    lTsPacketAbandonedCount++;
-                    continue;
-                }
-                System.arraycopy(arrayhelpers.GetBytes(udpDataPacket, AppConfig.TS_PAYLOAD_SIZE, lCopyIndex), 0, lTsPayloadBuffer, (i - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE, AppConfig.TS_PAYLOAD_SIZE);
-            }
-//        LogUtil.d(TAG, "一个UDP包中全部有效净荷拼接结果:" + stringhelpers.bytesToHexString(Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE)));
-            return Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE);//TODO 返回每个UDP包中n个有效TS包中的净荷拼接起来的字节数组
         }
     }
 
@@ -257,7 +206,8 @@ public final class LongRunningUDPService extends Service {
          */
         private static byte[] getNextValidPayload() {
             try {
-                return mPayloadArrayBlockingQueue.take();//FIXME 遇到队列中没有元素的时候,线程会阻塞
+//                            LogUtil.d(TAG, "TS净荷包     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpDataContainer).toUpperCase());
+                return parseUDPPacketToPayload(mPayloadArrayBlockingQueue.take());//FIXME 遇到队列中没有元素的时候,线程会阻塞
             } catch (InterruptedException e) {
                 Logger.t(TAG).e(e, "getNextValidPayload: ");
                 return new byte[0];//上一个return语句会阻塞,不会走到这一步!
@@ -284,6 +234,52 @@ public final class LongRunningUDPService extends Service {
                     currentCusDataArray = AppConfig.jointBuffer(currentCusDataArray, getNextValidPayload(), currentCusDataArray.length);//TODO 取出包括 00 88 88 之后的所有内容，与下一段净荷 进行拼接 ,截取前1024
                 }
             }
+        }
+
+        /**
+         * 解析接收到的"原始UDP数据包"进而获得"n个(0~6)TS净荷包"（TS包是顺序排放的），我们只需要 0x86 开头的UDP包(广科院协议)
+         * FIXME 已经"分析数据验证,函数严谨"
+         *
+         * @param udpDataPacket 原始的UDP数据报
+         * @return "n个TS包的净荷"有序拼接起来的字节数组（长度是 n * 184 n∈[0,6]）
+         */
+        @Nullable
+        private static byte[] parseUDPPacketToPayload(byte[] udpDataPacket) {
+//        if (udpDataPacket == null || udpDataPacket.length < (AppConfig.UDP_PACKET_HEADER_SIZE + AppConfig.UDP_PACKET_TAIL_SIZE)) {
+//            LogUtil.d(TAG, "UDP原始数据包为 null 或 长度小于 21+311,数据不符合要求进而被丢弃!");
+//            return null;
+//        } else if (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE) {
+//            LogUtil.i(TAG, "UDP原始数据包长不是1460,原始数据有问题!");
+//        }
+            {//①原始UDP数据正确性检验
+                if ((udpDataPacket == null) || (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE)) {
+                    LogUtil.e(TAG, "UDP原始数据包为 null 或 长度不是1460,数据不符合要求进而被丢弃!");
+                    return null;
+                }
+                if (udpDataPacket[0] != AppConfig.UDP_HEAD_0x86_VALUE) {//这个0x86是广科院的头，注意与自定义 ELEMENT_TABLE_DISCRIMINATOR 区分开   //TODO 5.筛选出 广科院0x86头 UDP数据报,(如果不是0x86开头的UDP包则抛弃掉)
+                    LogUtil.e(TAG, "UDP原始数据包头不是广科院协议头0x86,不符合要求进而被舍弃!");
+                    return null;
+                }
+            }
+
+            int lTsPacketAbandonedCount = 0;//被抛弃的ts包的数量
+            byte[] lTsPayloadBuffer = new byte[AppConfig.TS_PAYLOAD_NO * AppConfig.TS_PAYLOAD_SIZE];//将用于承载TS净荷的字节数组Buffer 6*184
+            CopyIndex lCopyIndex = new CopyIndex(AppConfig.UDP_PACKET_HEADER_SIZE);//TODO 跳过前21字节头;UDP包以 0x86开头,前21字节是协议头(收到后可以删除)，（1460-21-311=1128字节有效）    1128/6=188（每个TS包）
+            byte lTSHead, lTSPid1, lTSPid2;//TODO byte[]     取出当前同步字节，看是否等于0x 47 0F FE xx
+            for (int i = 0; i < AppConfig.TS_PAYLOAD_NO; i++) {//TODO 循环解析一个UDP包中的6个TS包
+                lTSHead = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
+                lTSPid1 = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
+                lTSPid2 = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
+                lCopyIndex.AddIndex(1);//前面已经 +1 +1 +1,现在 +1,跳过每个TS包的0x47前4个字节的协议头
+                if ((lTSHead != AppConfig.TS_HEAD_0x47_VALUE) || ((lTSPid1 & (byte) 0x1F) != (byte) 0x0F) || (lTSPid2 != (byte) 0xFE)) {//三个条件有一个不满足都要将当前ts包抛掉(即不满足TS包协议头)
+                    lCopyIndex.AddIndex(AppConfig.TS_PAYLOAD_SIZE);//TODO TS包以  0x47开头，前4个字节是协议头(0x47 xF FE xx)，其后是184字节净荷     4+184=188
+                    lTsPacketAbandonedCount++;
+                    continue;
+                }
+                System.arraycopy(arrayhelpers.GetBytes(udpDataPacket, AppConfig.TS_PAYLOAD_SIZE, lCopyIndex), 0, lTsPayloadBuffer, (i - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE, AppConfig.TS_PAYLOAD_SIZE);
+            }
+//        LogUtil.d(TAG, "一个UDP包中全部有效净荷拼接结果:" + stringhelpers.bytesToHexString(Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE)));
+            return Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE);//TODO 返回每个UDP包中n个有效TS包中的净荷拼接起来的字节数组
         }
     }
 
@@ -331,7 +327,7 @@ public final class LongRunningUDPService extends Service {
                     parseConfigTable(front1024OfCurrentPayloadArray);
                     break;
                 case AppConfig.ELEMENT_TABLE_DISCRIMINATOR://TODO 获得元素表,开始解析元素表 front1024OfCurrentPayloadArray 一定是00 88 88 xx 86开头
-//                    parseSectionData(front1024OfCurrentPayloadArray);
+                    parseSectionData(front1024OfCurrentPayloadArray);
                     break;
                 default:
             }
@@ -339,9 +335,7 @@ public final class LongRunningUDPService extends Service {
 
 
         private static int sVersionNumberInConfigTable = -1;//接收到的配置表中解析出的 版本号
-        private static final LongSparseArray<CDRElement> mCDRElementLongSparseArray = new LongSparseArray<>();       //TODO 存放 GUID 和 元素项
-        private static final Timer mTimer = new Timer();//定时器
-        private static final String[] elementFormat = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};      //.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
+        private static final LongSparseArray<Element> mCDRElementLongSparseArray = new LongSparseArray<>();       //TODO 存放 GUID 和 元素项
 
         /**
          * 解析配置表(table_id 一定是 0x87)函数(传递过来的参数一定就是 008888 开头的1024长度 数组) FIXME 相同版本号的配置表在解析成功后我们不再解析
@@ -387,7 +381,8 @@ public final class LongRunningUDPService extends Service {
             }
             //一切条件都满足:先更新版本号,接着向Map中写入"待接收的元素信息"从而开始解析"元素表"
             sVersionNumberInConfigTable = version_number;//FIXME 在前面全部解析通过后 更新接收到的配置表版本号
-            clearMediaListAndDeleteMediaFolder();//FIXME 发送安卓广播 清空分类文件集合根据广播设置UI    ；   删除本程序的媒体文件夹下的文件
+            AppConfig.getLocalBroadcastManager().sendBroadcast(new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST).putExtra(AppConfig.KEY_DELETE_MEDIA_LIST, true));//1.应该先发送广播请求清空分类文件集合
+            FileUtils.deleteFilesInDir(AppConfig.FILE_FOLDER);//2.再清空本程序多媒体文件夹下的文件
 
             lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 1 + 1 + 1);
             long lElementGuid;
@@ -396,15 +391,19 @@ public final class LongRunningUDPService extends Service {
                 lElementGuid = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);
                 LogUtil.e(TAG, MessageFormat.format("根据配置表中解析出 元素GUID:{0}", lElementGuid));
                 if (mCDRElementLongSparseArray.indexOfKey(lElementGuid) < 0) {
-                    CDRElement cdrElement = new CDRElement();
-                    cdrElement.setVersionNumber(version_number);
-                    mCDRElementLongSparseArray.put(lElementGuid, cdrElement);
+                    Element lElement = new Element();
+                    lElement.setVersionNumber(version_number);
+                    mCDRElementLongSparseArray.put(lElementGuid, lElement);
                 }
                 lCopyIndex.AddIndex(1 + 1 + 1 + 1);
             }//不用判断 element_count == mCDRElementLongSparseArray.size() ?
-
             LogUtil.e(TAG, "解析配置表成功!");
         }
+
+
+        private static final Handler HANDLER = new Handler();
+        private static final String[] ELEMENT_FORMAT = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};//.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
+        private static List<Integer> sSectionsNumberList;//FIXME 用于存放当前数据段所对应元素的"所有段号"
 
         /**
          * 解析段的数据,并写入文件; 长度已经事先拼接好了,不用再考虑解析完成后剩余内容的拼接问题
@@ -413,142 +412,86 @@ public final class LongRunningUDPService extends Service {
          */
         private static void parseSectionData(byte[] sectionBuffer) {
             LogUtil.e(TAG, "接收到元素表数据段,开始解析====>");
+//            LogUtil.d(TAG, MessageFormat.format("元素表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
             if (mCDRElementLongSparseArray.size() <= 0) {
-                LogUtil.d(TAG, "接收到元素表数据段,但程序启动后还未成功解析过配置表,等待接收解析配置表,暂不解析数据段直接丢弃.");
+                LogUtil.d(TAG, "接收到元素表数据段,但程序启动后还未成功解析过配置表,直接将当前数据段丢弃.");
                 return;
             }
 
             CopyIndex lCopyIndex = new CopyIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1);//下标先偏移到 86位置 之后,再开始做解析工作
-
             int version_number = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
             if (version_number != sVersionNumberInConfigTable) {
-                LogUtil.e(TAG, MessageFormat.format("接收到的元素表中解析出 版本号 与配置表中解出的版本号不一致,退出元素表解析工作.{0}!={1}", version_number, sVersionNumberInConfigTable));
+                LogUtil.e(TAG, MessageFormat.format("接收到的元素表中解析出 版本号 与配置表中解出的版本号不一致,退出元素表解析工作.版本号 {0} != {1}", version_number, sVersionNumberInConfigTable));
                 return;
             }
-
             int section_length = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
-            if (section_length <= (2 + 2 + 4 + 1 + 1 + 4 + 4)) {
-                LogUtil.e(TAG, MessageFormat.format("接收到的元素表段长度不足 2 + 2 + 4 + 1 + 1 + 4 + 4 = 18,退出元素表解析操作:{0}", stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
+            if (section_length != (AppConfig.CUS_DATA_SIZE - AppConfig.TABLE_DISCRIMINATOR_INDEX - 1 - 1 - 2)) {//段长度必定是 1024 - 4 - 1 - 1 - 2 = 1016
+                LogUtil.e(TAG, "根据元素表中解析出 段长度 不是1024 - 4 - 1 - 1 - 2 = 1016,退出元素表解析操作!");
                 return;
             }
-
             int section_number = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
-            if (section_number < 0) {
-                LogUtil.e(TAG, "接收到的元素表中解析出 当前段号 小于0,退出元素表解析操作.");
-                return;
-            }
-
             int section_count = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
-            if (section_count < 0) {
-                LogUtil.e(TAG, "接收到的元素表中解析出 段的数量 小于0，退出元素表解析操作.");
-                return;
-            }
             if (section_number >= section_count) {
-                LogUtil.e(TAG, "接收到的元素表中解析出 段号 大于等于 段数量,退出元素表解析操作.");
+                LogUtil.e(TAG, "接收到的元素表中解析出 当前段号 大于等于 段数量,退出元素表解析操作.");
                 return;
             }
-
             long element_guid = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);
-            if (element_guid < 0) {
-                LogUtil.e(TAG, MessageFormat.format("接收到的元素表中解析出 元素表解析出元素guid小于0,退出元素表解析操作.GUID:{0}元素段:{1}", element_guid, stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
-                return;
-            }
-//            if (mCDRElementLongSparseArray.indexOfKey(element_guid) < 0) {//FIXME 前面已经有 version_number 过滤条件
-//                LogUtil.d(TAG, "收到 新版本的数据段 但是没有收到 新版本的配置表，不做解析！");
-//                return;
-//            }
-
-            List<Integer> sectionsNumberList = null;
-            CDRElement cdrElement = mCDRElementLongSparseArray.get(element_guid);        //根据 元素GUID 获取元素段
-            if (cdrElement != null) {
-                if (cdrElement.getVersionNumber() != version_number) {
-                    LogUtil.d(TAG, "解析所得的版本号与CDR元素项版本号不符，退出元素表解析操作。");
+            Element lElement = mCDRElementLongSparseArray.get(element_guid);//根据 元素GUID 获取元素对象
+            if (lElement != null) {
+                if (version_number != lElement.getVersionNumber()) {
+                    LogUtil.d(TAG, "根据元素表中解析出 版本号与元素版本号不一致,退出元素段解析工作.");
                     return;
-                }
-                sectionsNumberList = cdrElement.getSectionsNumberList();
-            }
-            if ((sectionsNumberList != null) && (sectionsNumberList.contains(section_number))) {                                                      // 如果“一个文件中已经收取过当前段号”，就不再收取
-                LogUtil.d(TAG, "已经接收过当前段号的数据，不再重复解析，退出元素表解析操作。");
-                return;
-            }
-            if (sectionsNumberList != null) {
-                LogUtil.d(TAG, MessageFormat.format("段号-->列表Size：{0} 段号-->列表：{1}", sectionsNumberList.size(), sectionsNumberList));
-            }
-            int element_type = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
-            if (element_type < 0) {
-                LogUtil.d(TAG, "元素表解析出元素类型小于0，退出元素表解析操作！");
-                return;
-            }
-
-            int element_format = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
-            if (element_format < 0) {
-                LogUtil.d(TAG, "元素表解析出元素格式小于0，退出元素表解析操作！");
-                return;
-            }
-
-            int section_data_length = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);
-            if ((section_data_length <= 0) || (section_data_length > 998)) {
-                LogUtil.d(TAG, "元素表解析出元素大小不符合要求(0,998]，退出元素表解析操作！");
-                return;
-            }
-            byte[] section_data = arrayhelpers.GetBytes(sectionBuffer, section_data_length, lCopyIndex);
-            if (section_data.length <= 0) {
-                LogUtil.d(TAG, "元素表解析出元素数据长度为负，退出元素表解析操作！");
-                return;
-            }
-
-            //获取CRCBuffer
-            lCopyIndex.Reset();
-            lCopyIndex.AddIndex(4 + 4);
-            byte[] CRCBuffer = arrayhelpers.GetBytes(sectionBuffer, section_length - 4, lCopyIndex);
-            int calcCRC = calculateCRC(CRCBuffer);
-
-            int crc = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);
-
-            //校验CRC
-            if (calcCRC != crc) {
-                LogUtil.e(TAG, MessageFormat.format("CRC校验错误的段落->   GUID={0}\t段号={1}", element_guid, section_number));
-                LogUtil.d(TAG, MessageFormat.format("CRC校验错误的Buffer：{0}", stringhelpers.bytesToHexString(sectionBuffer).toUpperCase()));
-                return;
-            }
-
-            //TODO 将本段数据写入到磁盘
-            if ((element_format < 0) || (element_format > (elementFormat.length - 1))) {
-                LogUtil.d(TAG, "元素格式下标越界，退出元素表解析。");
-                return;
-            }
-            String extention = elementFormat[element_format];
-            //TODO 创建 当前文件
-            File file = new File(AppConfig.FILE_FOLDER, element_guid + extention);
-            FileUtils.createOrExistsFile(file);
-
-            RandomAccessFile randomAccessFile;
-            try {
-                randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.seek(section_number * 998);                            //偏移工作    1024-4-22=998
-                randomAccessFile.write(section_data, 0, section_data_length);           //TODO 当前数据长度要改动
-
-                if (sectionsNumberList != null) {
-                    sectionsNumberList.add(section_number);
-                    LogUtil.d(TAG, "写文件添加段号-->" + section_number);
-                    LogUtil.e(TAG, "GUID：" + element_guid + "，接收比例：" + sectionsNumberList.size() + "/" + section_count);
-
-                    if (sectionsNumberList.size() == section_count) {
-                        LogUtil.i(TAG, "######################################################################当前文件\t\t" + element_guid + extention + "\t\t接收完成#####################################################################");
-                        mTimer.schedule(new TimerTask() {
-                            @Override
-                            public void run() {
-                                Intent intent = new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST);                                                                                                               //TODO 删除多媒体文件夹 和 清除分类文件集合 的逻辑
-                                intent.putExtra("filePath", file.getName());
-                                AppConfig.getLocalBroadcastManager().sendBroadcast(intent);
-                            }
-                        }, 500);    //延迟1.5秒发送安卓广播去更新UI
+                } else {
+                    sSectionsNumberList = lElement.getSectionsNumberList();//------期望逻辑------
+                    if (sSectionsNumberList.contains(section_number)) {
+                        LogUtil.d(TAG, "已经成功接收过当前段号的数据,不再重复解析,退出元素表解析操作.");
+                        return;
                     }
                 }
-                randomAccessFile.close();
-            } catch (Exception e) {
-                Logger.t(TAG).e(e, "parseSectionData: ");
+            } else {
+                LogUtil.d(TAG, "在映射表的Key中找不到 通过当前元素段解析出的元素GUID,退出元素段的解析工作!");
+                return;
             }
+            int element_type = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
+            int element_format = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
+            if ((element_format > (ELEMENT_FORMAT.length - 1))) {
+                LogUtil.d(TAG, MessageFormat.format("根据元素表中解析出 元素格式 不是预定义文件数据格式{0}", Arrays.toString(ELEMENT_FORMAT)));
+                return;
+            }
+            int section_data_length = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);
+            if ((section_data_length <= 0) || (section_data_length > (AppConfig.CUS_DATA_SIZE - (AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 4 + 1 + 1 + 4 + 4)))) {//有效文件数据只有 998 字节
+                LogUtil.d(TAG, "根据元素表中解析出 其中有效文件数据大小不符合(0,998]字节要求,退出元素表解析操作!");
+                return;
+            }
+            //校验CRC
+            lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2);
+            int calcCRC = calculateCRC(arrayhelpers.GetBytes(sectionBuffer, section_length - 4, lCopyIndex));//计算所得CRC
+            int readCRC = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);//读取所得CRC
+            if (calcCRC != readCRC) {//计算所得CRC 与 读取所得CRC 不一致
+                LogUtil.e(TAG, MessageFormat.format("CRC校验错误.GUID = {0} 当前段号 = {1} 段落数据:{2}", element_guid, section_number, stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
+                return;
+            }
+
+            //TODO 将当前元素段中解析出的文件数据写入磁盘
+            String lFileName = MessageFormat.format("{0}{1}", element_guid, ELEMENT_FORMAT[element_format]);
+            File lFile = new File(AppConfig.FILE_FOLDER, lFileName);
+            FileUtils.createOrExistsFile(lFile);
+            try (RandomAccessFile lRandomAccessFile = new RandomAccessFile(lFile, "rw")) {
+                lRandomAccessFile.seek(section_number * 998L);//偏移工作(断点续写):(AppConfig.CUS_DATA_SIZE - (AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 4 + 1 + 1 + 4 + 4)) = 998
+                lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 4 + 1 + 1 + 4);
+                lRandomAccessFile.write(arrayhelpers.GetBytes(sectionBuffer, section_data_length, lCopyIndex));//FIXME 当前数据长度要改动
+                lRandomAccessFile.close();
+                LogUtil.e(TAG, MessageFormat.format("GUID:{0},当前段号:{1},接收比例:{2}／{3}", String.valueOf(element_guid), String.valueOf(section_number), String.valueOf(sSectionsNumberList.size()), String.valueOf(section_count)));
+
+                sSectionsNumberList.add(section_number);
+                if (sSectionsNumberList.size() == section_count) {
+                    LogUtil.i(TAG, MessageFormat.format("########################################################## 当前文件\t\t{0}\t\t接收完成 ##########################################################", lFileName));
+                    HANDLER.postDelayed(() -> AppConfig.getLocalBroadcastManager().sendBroadcast(new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST).putExtra("filePath", lFile.getName())), 500);//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
+                }
+            } catch (Exception e) {
+                Logger.t(TAG).e(e, "parseSectionData0: ");
+            }
+            LogUtil.e(TAG, "解析元素表成功!");
         }
 
         private static final CopyIndex sCopyIndex = new CopyIndex(0);
@@ -563,14 +506,6 @@ public final class LongRunningUDPService extends Service {
             byte[] crcBuffer = {(byte) 0x12, (byte) 0x34, bufferToCalcCRC[0], bufferToCalcCRC[1]};
             sCopyIndex.Reset();
             return arrayhelpers.GetInt32(crcBuffer, sCopyIndex);
-        }
-
-        /**
-         * 发送广播清空分类多媒体集合  并  清空存放本程序多媒体文件的文件夹
-         */
-        private static void clearMediaListAndDeleteMediaFolder() {//TODO 删除多媒体文件夹 和 清除分类文件集合 的逻辑
-            AppConfig.getLocalBroadcastManager().sendBroadcast(new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST).putExtra(AppConfig.KEY_DELETE_MEDIA_LIST, true));//1.应该先发送广播请求清空分类文件集合
-            FileUtils.deleteFilesInDir(AppConfig.FILE_FOLDER);//2.再清空本程序多媒体文件夹下的文件
         }
     }
 }
