@@ -17,7 +17,7 @@ import java.util.Arrays;
 public final class AppConfig {
     private static final String TAG = "TAG_AppConfig";
     public static final int PORT = 8080;//服务器端口
-    public static final int ARRAY_BLOCKING_QUEUE_CAPACITY = 2000;
+    public static final int ARRAY_BLOCKING_QUEUE_CAPACITY = 20000;
     // 21+188*6+311=1460
     public static final int UDP_PACKET_HEADER_SIZE = 21;//UDP包头长度
     public static final int TS_PAYLOAD_NO = 6;

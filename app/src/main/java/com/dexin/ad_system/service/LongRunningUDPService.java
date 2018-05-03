@@ -122,9 +122,10 @@ public final class LongRunningUDPService extends Service {
 //                        mDatagramSocket.setSoTimeout(8000);
                         mDatagramSocket.receive(mDatagramPacket);//将单播套接字收到的UDP数据包存放于datagramPacket中(会阻塞)
                         mUdpPackContainer = mDatagramPacket.getData();//UDP数据包
-//                        LogUtil.d(TAG, MessageFormat.format("UDP原始数据包AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase(Locale.getDefault())));
                         if ((mUdpPackContainer != null) && (mUdpPackContainer.length > 0)) {
-                            mUDPPackArrayBlockingQueue.put(mUdpPackContainer);//FIXME 是否应该考虑将过滤净荷的逻辑放于出队时
+//                            LogUtil.d(TAG, MessageFormat.format("UDP原始数据包-入队前-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBB:\t\t{0}", stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase(Locale.getDefault())));
+//                            mUDPPackArrayBlockingQueue.put(mUdpPackContainer);//FIXME 是否应该考虑将过滤净荷的逻辑放于出队时
+                            mUDPPackArrayBlockingQueue.offer(mUdpPackContainer);
                         }
                     } catch (Exception e) {
                         Logger.t(TAG).e(e, "run: ");
@@ -207,11 +208,18 @@ public final class LongRunningUDPService extends Service {
         private static byte[] getNextValidPayload() {
             try {
 //                            LogUtil.d(TAG, "TS净荷包     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase());
-                return parseUDPPacketToPayload(mUDPPackArrayBlockingQueue.take());//FIXME 遇到队列中没有元素的时候,线程会阻塞        取出原始UDP包,解析成"(0~6)*184净荷"并返回
-            } catch (InterruptedException e) {
+                if (!mUDPPackArrayBlockingQueue.isEmpty()) {
+//                    byte[] mUdpPackContainer = mUDPPackArrayBlockingQueue.take();
+                    byte[] mUdpPackContainer = mUDPPackArrayBlockingQueue.poll();
+                    if ((mUdpPackContainer != null) && (mUdpPackContainer.length > 0)) {
+//                        LogUtil.d(TAG, MessageFormat.format("UDP原始数据包-出队后-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBB:\t\t{0}", stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase(Locale.getDefault())));
+                        return parseUDPPacketToPayload(mUdpPackContainer);//FIXME 遇到队列中没有元素的时候,线程会阻塞        取出原始UDP包,解析成"(0~6)*184净荷"并返回
+                    }
+                }
+            } catch (Exception e) {
                 Logger.t(TAG).e(e, "getNextValidPayload: ");
-                return new byte[0];//上一个return语句会阻塞,不会走到这一步!
             }
+            return new byte[0];//上一个return语句前会阻塞,不会走到这一步!
         }
 
         /**
@@ -225,8 +233,9 @@ public final class LongRunningUDPService extends Service {
             while (true) {//TODO currentCusDataArray 的前1024（长度完全可能小于1024）可能含有文件本身数据 008888(是否可以不用考虑呢?)，1024表示要找到我们一个段长的数据，段的长度就是1024
                 if (currentCusDataArray.length >= AppConfig.CUS_DATA_SIZE) {
                     try {
-                        mCusDataArrayBlockingQueue.put(Arrays.copyOfRange(currentCusDataArray, 0, AppConfig.CUS_DATA_SIZE));
-                    } catch (InterruptedException e) {
+//                        mCusDataArrayBlockingQueue.put(Arrays.copyOfRange(currentCusDataArray, 0, AppConfig.CUS_DATA_SIZE));
+                        mCusDataArrayBlockingQueue.offer(Arrays.copyOfRange(currentCusDataArray, 0, AppConfig.CUS_DATA_SIZE));
+                    } catch (Exception e) {
                         Logger.t(TAG).e(e, "cutOutPayloadArrayAfterHead008888: ");
                     }
                     return Arrays.copyOfRange(currentCusDataArray, AppConfig.CUS_DATA_SIZE, currentCusDataArray.length);//返回超出 1024 部分的数据
@@ -299,8 +308,14 @@ public final class LongRunningUDPService extends Service {
             isNeedParsePayloadData = true;
             while (isNeedParsePayloadData) {
                 try {
-                    parseCustomDataWithHead008888(mCusDataArrayBlockingQueue.take());
-                } catch (InterruptedException e) {
+                    if (!mCusDataArrayBlockingQueue.isEmpty()) {
+//                        parseCustomDataWithHead008888(mCusDataArrayBlockingQueue.take());
+                        byte[] lCusDataBuffer = mCusDataArrayBlockingQueue.poll();
+                        if (lCusDataBuffer != null) {
+                            parseCustomDataWithHead008888(lCusDataBuffer);
+                        }
+                    }
+                } catch (Exception e) {
                     Logger.t(TAG).e(e, "run: ");
                 }
             }
@@ -403,7 +418,6 @@ public final class LongRunningUDPService extends Service {
 
         private static final Handler HANDLER = new Handler();
         private static final String[] ELEMENT_FORMAT = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};//.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
-        private static List<Integer> sSectionsNumberList;//FIXME 用于存放当前数据段所对应元素的"所有段号"
 
         /**
          * 解析段的数据,并写入文件; 长度已经事先拼接好了,不用再考虑解析完成后剩余内容的拼接问题
@@ -411,7 +425,6 @@ public final class LongRunningUDPService extends Service {
          * @param sectionBuffer 段的Buffer字节数组
          */
         private static void parseSectionData(byte[] sectionBuffer) {
-            LogUtil.e(TAG, "接收到元素表数据段,开始解析====>");
 //            LogUtil.d(TAG, MessageFormat.format("元素表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
             if (mCDRElementLongSparseArray.size() <= 0) {
                 LogUtil.d(TAG, "接收到元素表数据段,但程序启动后还未成功解析过配置表,直接将当前数据段丢弃.");
@@ -430,6 +443,9 @@ public final class LongRunningUDPService extends Service {
                 return;
             }
             int section_number = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
+//            if (section_number == 20) {
+//                LogUtil.d(TAG, MessageFormat.format("元素表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBB:\t\t{0}\t{1}", mCusDataArrayBlockingQueue.size(), stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
+//            }
             int section_count = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
             if (section_number >= section_count) {
                 LogUtil.e(TAG, "接收到的元素表中解析出 当前段号 大于等于 段数量,退出元素表解析操作.");
@@ -437,6 +453,7 @@ public final class LongRunningUDPService extends Service {
             }
             long element_guid = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);
             Element lElement = mCDRElementLongSparseArray.get(element_guid);//根据 元素GUID 获取元素对象
+            List<Integer> sSectionsNumberList;//FIXME 用于存放当前数据段所对应元素的"所有段号"
             if (lElement != null) {
                 if (version_number != lElement.getVersionNumber()) {
                     LogUtil.d(TAG, "根据元素表中解析出 版本号与元素版本号不一致,退出元素段解析工作.");
@@ -444,7 +461,7 @@ public final class LongRunningUDPService extends Service {
                 } else {
                     sSectionsNumberList = lElement.getSectionsNumberList();//------期望逻辑------
                     if (sSectionsNumberList.contains(section_number)) {
-                        LogUtil.d(TAG, "已经成功接收过当前段号的数据,不再重复解析,退出元素表解析操作.");
+                        LogUtil.d(TAG, MessageFormat.format("已经成功接收过当前段号的数据,不再重复解析,退出元素表解析操作.GUID:{0},当前段号:{1}", element_guid, String.valueOf(section_number)));
                         return;
                     }
                 }
@@ -468,7 +485,7 @@ public final class LongRunningUDPService extends Service {
             int calcCRC = calculateCRC(arrayhelpers.GetBytes(sectionBuffer, section_length - 4, lCopyIndex));//计算所得CRC
             int readCRC = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);//读取所得CRC
             if (calcCRC != readCRC) {//计算所得CRC 与 读取所得CRC 不一致
-                LogUtil.e(TAG, MessageFormat.format("CRC校验错误.GUID = {0} 当前段号 = {1} 段落数据:{2}", element_guid, section_number, stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
+                LogUtil.e(TAG, MessageFormat.format("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBB CRC校验错误.GUID = {0} 当前段号 = {1} 段落数据:{2}", element_guid, section_number, stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
                 return;
             }
 
@@ -491,7 +508,6 @@ public final class LongRunningUDPService extends Service {
             } catch (Exception e) {
                 Logger.t(TAG).e(e, "parseSectionData0: ");
             }
-            LogUtil.e(TAG, "解析元素表成功!");
         }
 
         private static final CopyIndex sCopyIndex = new CopyIndex(0);

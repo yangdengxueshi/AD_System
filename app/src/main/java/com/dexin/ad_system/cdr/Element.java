@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 元素类
+ * 配置表中的某一元素项
  */
 public class Element {
     private int mVersionNumber = -1;//元素 版本号
