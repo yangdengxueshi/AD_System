@@ -39,8 +39,8 @@ public final class AppConfig {
     public static final String FILE_FOLDER = Objects.requireNonNull(CustomApplication.getContext().getExternalCacheDir()).getAbsolutePath();//存放本程序多媒体文件的目录
     public static final byte[] sHead008888Array = {(byte) 0x00, (byte) 0x88, (byte) 0x88};//自定义协议头0x 008888 头
 
-    public static final String LOAD_FILE_OR_DELETE_MEDIA_LIST = "LOAD_FILE_OR_DELETE_MEDIA_LIST";
-    public static final String KEY_DELETE_MEDIA_LIST = "KEY_DELETE_MEDIA_LIST";
+    public static final String ACTION_RECEIVE_CONFIG_TABLE = "ACTION_RECEIVE_CONFIG_TABLE";//收到配置表
+    public static final String ACTION_RECEIVE_ELEMENT_TABLE = "ACTION_RECEIVE_ELEMENT_TABLE";//收到元素表
     public static final String KEY_FILE_NAME = "KEY_FILE_NAME";
 
     private static final class LocalBroadcastManagerHolder {

@@ -3,6 +3,7 @@ package com.dexin.ad_system.service;
 import android.app.Service;
 import android.content.Intent;
 import android.graphics.BitmapFactory;
+import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -58,6 +59,18 @@ public final class LongRunningUDPService extends Service {
         if (mUDPPackProducerThread == null) mUDPPackProducerThread = new UDPPackProducerThread();
         if (mPayloadConsumerThread == null) mPayloadConsumerThread = new PayloadConsumerThread();
         if (mCusDataConsumerThread == null) mCusDataConsumerThread = new CusDataConsumerThread();
+
+        Intent S_CONFIG_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);
+        Intent S_ELEMENT_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);
+        Handler lHandler = new Handler();
+        lHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                AppConfig.getLocalBroadcastManager().sendBroadcast(S_CONFIG_TABLE_INTENT);//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
+                AppConfig.getLocalBroadcastManager().sendBroadcast(S_ELEMENT_TABLE_INTENT.putExtra(AppConfig.KEY_FILE_NAME, MessageFormat.format("\t\t{0}", String.valueOf(System.currentTimeMillis()))));//1.应该先发送广播"请求清空分类文件集合"
+                lHandler.postDelayed(this, 5000);
+            }
+        });
     }
 
     @Override
@@ -331,6 +344,8 @@ public final class LongRunningUDPService extends Service {
         private static int sVersionNumberInConfigTable = -1;//接收到的配置表中解析出的 版本号
         private static final LongSparseArray<Element> mCDRElementLongSparseArray = new LongSparseArray<>();       //TODO 存放 GUID 和 元素项
 
+        private static final Intent S_CONFIG_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);
+
         /**
          * 解析配置表(table_id 一定是 0x87)函数(传递过来的参数一定就是 008888 开头的1024长度 数组) FIXME 相同版本号的配置表在解析成功后我们不再解析
          *
@@ -375,7 +390,7 @@ public final class LongRunningUDPService extends Service {
             }
             //一切条件都满足:先更新版本号,接着向Map中写入"待接收的元素信息"从而开始解析"元素表"
             sVersionNumberInConfigTable = version_number;//FIXME 在前面全部解析通过后 更新接收到的配置表版本号
-            AppConfig.getLocalBroadcastManager().sendBroadcast(new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST).putExtra(AppConfig.KEY_DELETE_MEDIA_LIST, true));//1.应该先发送广播"请求清空分类文件集合"
+            AppConfig.getLocalBroadcastManager().sendBroadcast(S_CONFIG_TABLE_INTENT);//1.应该先发送广播"请求清空分类文件集合"
             FileUtils.deleteFilesInDir(AppConfig.FILE_FOLDER);//2.再清空本程序多媒体文件夹下的文件
 
             lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 1 + 1 + 1);
@@ -396,6 +411,7 @@ public final class LongRunningUDPService extends Service {
 
 
         private static final String[] ELEMENT_FORMAT = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};//.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
+        private static final Intent S_ELEMENT_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);
 
         /**
          * 解析段的数据,并写入文件; 长度已经事先拼接好了,不用再考虑解析完成后剩余内容的拼接问题
@@ -478,7 +494,7 @@ public final class LongRunningUDPService extends Service {
                 sSectionsNumberList.add(section_number);
                 if (sSectionsNumberList.size() == section_count) {
                     LogUtil.i(TAG, MessageFormat.format("########################################################## 当前文件\t\t{0}\t\t接收完成 ##########################################################", lFile.getName()));
-                    AppConfig.getLocalBroadcastManager().sendBroadcast(new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST).putExtra(AppConfig.KEY_FILE_NAME, lFile.getName()));//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
+                    AppConfig.getLocalBroadcastManager().sendBroadcast(S_ELEMENT_TABLE_INTENT.putExtra(AppConfig.KEY_FILE_NAME, lFile.getName()));//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
                 }
             } catch (Exception e) {
                 Logger.t(TAG).e(e, "parseSectionData0: ");

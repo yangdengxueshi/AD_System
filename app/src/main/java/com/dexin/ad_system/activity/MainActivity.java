@@ -45,6 +45,7 @@ import java.lang.ref.WeakReference;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -69,11 +70,10 @@ public class MainActivity extends AppCompatActivity {
     VideoView mVvVideo;
     @BindView(R.id.v_menu)
     View mVMenu;
-    //TODO 二、UI
     //    private VerticalMarqueeTextView vmtvDetail;
 
     //TODO 三、广播
-    private LocalCDRBroadcastReceiver mLocalCDRBroadcastReceiver;      //TODO UDP接收器广播,当缓存完成时调用
+    private DataTableReceiver mDataTableReceiver;      //TODO UDP接收器广播,当缓存完成时调用
 
     //TODO 五、创建WifiLock和MulticastLock
     private WifiManager.WifiLock mWifiLock;
@@ -94,8 +94,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        RxBarTool.hideStatusBar(this);//隐藏掉状态栏
+        getWindow().setBackgroundDrawable(null);
         getWindow().setFlags(FLAG_HOMEKEY_DISPATCHED, FLAG_HOMEKEY_DISPATCHED);    //设置为主屏幕的关键代码
+        RxBarTool.hideStatusBar(this);//隐藏掉状态栏
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
@@ -121,7 +122,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         //注销工作
         unregisterForContextMenu(mVMenu);
-        AppConfig.getLocalBroadcastManager().unregisterReceiver(mLocalCDRBroadcastReceiver);
+        AppConfig.getLocalBroadcastManager().unregisterReceiver(mDataTableReceiver);
         mCustomHandler.removeCallbacksAndMessages(null);
 
 
@@ -227,10 +228,12 @@ public class MainActivity extends AppCompatActivity {
         }
 */
         //TODO 三、广播
-        mLocalCDRBroadcastReceiver = new LocalCDRBroadcastReceiver();
+        mDataTableReceiver = new DataTableReceiver();
 
-
-        AppConfig.getLocalBroadcastManager().registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST));
+        IntentFilter lIntentFilter = new IntentFilter();
+        lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);//收到配置表
+        lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);//收到元素表
+        AppConfig.getLocalBroadcastManager().registerReceiver(mDataTableReceiver, lIntentFilter);
 
         //TODO 五、创建WifiLock和MulticastLock(Wifi锁 和 多播锁)
         WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
@@ -416,60 +419,63 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * TODO UDP接收器广播,当缓存完成时调用
+     * FIXME 数据表接收器
      */
-    public class LocalCDRBroadcastReceiver extends BroadcastReceiver {
+    public class DataTableReceiver extends BroadcastReceiver {
+
         @Override
         public void onReceive(Context context, Intent intent) {
-            boolean deleteMediaList = intent.getBooleanExtra(AppConfig.KEY_DELETE_MEDIA_LIST, false);
-            String filePath = "";
+            if (intent != null) {
+                switch (Objects.requireNonNull(intent.getAction())) {
+                    case AppConfig.ACTION_RECEIVE_CONFIG_TABLE://1.收到"新版本的配置表"
+                        imageList.clear();
+                        mIvShow.setImageResource(R.drawable.bg_main);
 
-            if (deleteMediaList) {                  //判断    是否需要将当前分类多媒体文件集合清空
-                imageList.clear();
-                mIvShow.setImageResource(R.drawable.bg_main);
+                        txtList.clear();
+//                        vmtvDetail.setText("");
+                        mTvDetail.setText("");
 
-                txtList.clear();
-//                vmtvDetail.setText("");
-                mTvDetail.setText("");
+                        mMediaPlayer.reset();
+                        break;
+                    case AppConfig.ACTION_RECEIVE_ELEMENT_TABLE://2.收到"新版本的元素表":
+                        String filePath = AppConfig.FILE_FOLDER + "/" + intent.getStringExtra(AppConfig.KEY_FILE_NAME);
 
-                mMediaPlayer.reset();
-            } else {                                //否则    传递的是文件路径，在这里获取文件路径
-                filePath = AppConfig.FILE_FOLDER + "/" + intent.getStringExtra(AppConfig.KEY_FILE_NAME);
-            }
+                        if (filePath.endsWith(".png") || filePath.endsWith(".bmp") || filePath.endsWith(".jpg") || filePath.endsWith(".gif")) {     //1.显示图片
+                            //1.显示图片
+                            Bitmap bitmap = BitmapFactory.decodeFile(filePath);
+                            mIvShow.setImageBitmap(bitmap);
 
-            if (filePath.endsWith(".png") || filePath.endsWith(".bmp") || filePath.endsWith(".jpg") || filePath.endsWith(".gif")) {     //1.显示图片
-                //1.显示图片
-                Bitmap bitmap = BitmapFactory.decodeFile(filePath);
-                mIvShow.setImageBitmap(bitmap);
+                            imageList.add(filePath);
+                            currentImageIndex = imageList.indexOf(filePath);
+                            if (!isSlideShowImage) {                //没有播放幻灯片(图片)，则开始播放幻灯片
+                                loadLanternSlideImage();            //加载幻灯片,只用调用一次也只能调用一次
+                                isSlideShowImage = true;
+                            }
+                            Toast.makeText(CustomApplication.getContext(), "收到    图片", Toast.LENGTH_LONG).show();
+                        } else if (filePath.endsWith(".txt")) {
+                            //2.显示文字
+                            txtList.add(filePath);
+//                            vmtvDetail.setText(AppConfig.LINE_HEAD + loadText(txtList));
+                            mTvDetail.setText(MessageFormat.format("{0}{1}", AppConfig.LINE_HEAD, loadText(txtList)));
+                            Toast.makeText(CustomApplication.getContext(), "收到    文字", Toast.LENGTH_LONG).show();
+                        } else if (filePath.endsWith(".mp3") || filePath.endsWith(".wav")) {                                                        //4.播放音乐
+                            initMediaPlayerAndPlayMusic(filePath);
 
-                imageList.add(filePath);
-                currentImageIndex = imageList.indexOf(filePath);
-                if (!isSlideShowImage) {                //没有播放幻灯片(图片)，则开始播放幻灯片
-                    loadLanternSlideImage();            //加载幻灯片,只用调用一次也只能调用一次
-                    isSlideShowImage = true;
-                }
-                Toast.makeText(CustomApplication.getContext(), "收到    图片", Toast.LENGTH_LONG).show();
-            } else if (filePath.endsWith(".txt")) {
-                //2.显示文字
-                txtList.add(filePath);
-//                vmtvDetail.setText(AppConfig.LINE_HEAD + loadText(txtList));
-                mTvDetail.setText(MessageFormat.format("{0}{1}", AppConfig.LINE_HEAD, loadText(txtList)));
-                Toast.makeText(CustomApplication.getContext(), "收到    文字", Toast.LENGTH_LONG).show();
-            } else if (filePath.endsWith(".mp3") || filePath.endsWith(".wav")) {                                                        //4.播放音乐
-                initMediaPlayerAndPlayMusic(filePath);
-
-                String finalFilePath = filePath;
-                mTimer.schedule(new TimerTask() {
-                    @Override
-                    public void run() {
-                        if (!mMediaPlayer.isPlaying()) {
-                            initMediaPlayerAndPlayMusic(finalFilePath);
+                            mTimer.schedule(new TimerTask() {
+                                @Override
+                                public void run() {
+                                    if (!mMediaPlayer.isPlaying()) {
+                                        initMediaPlayerAndPlayMusic(filePath);
+                                    }
+                                }
+                            }, 5000, 10000);
+                            Toast.makeText(CustomApplication.getContext(), "收到    音频", Toast.LENGTH_LONG).show();
+                        } else if (filePath.endsWith(".avi") || filePath.endsWith(".mp4") || filePath.endsWith(".rmvb") || filePath.endsWith(".wmv") || filePath.endsWith(".3gp")) {    //3.显示视频
+                            Toast.makeText(CustomApplication.getContext(), "收到    视频", Toast.LENGTH_LONG).show();
                         }
-                    }
-                }, 5000, 10000);
-                Toast.makeText(CustomApplication.getContext(), "收到    音频", Toast.LENGTH_LONG).show();
-            } else if (filePath.endsWith(".avi") || filePath.endsWith(".mp4") || filePath.endsWith(".rmvb") || filePath.endsWith(".wmv") || filePath.endsWith(".3gp")) {    //3.显示视频
-                Toast.makeText(CustomApplication.getContext(), "收到    视频", Toast.LENGTH_LONG).show();
+                        break;
+                    default:
+                }
             }
         }
     }
