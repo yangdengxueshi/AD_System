@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Objects;
 
 public class CustomApplication extends Application {
-    private static Context context;//TODO 这里static所修饰的context并不会引起内存泄漏，因为static数据与单例的context同生命周期
+    private static Context context;//FIXME 这里static所修饰的context并不会引起内存泄漏，因为static数据与单例的context同生命周期
 
     /**
      * 全局获取 Context对象

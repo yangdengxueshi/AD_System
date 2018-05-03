@@ -3,7 +3,6 @@ package com.dexin.ad_system.service;
 import android.app.Service;
 import android.content.Intent;
 import android.graphics.BitmapFactory;
-import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -29,6 +28,7 @@ import java.io.RandomAccessFile;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.List;
@@ -53,14 +53,8 @@ public final class LongRunningUDPService extends Service {
     public void onCreate() {
         super.onCreate();
         startForeground(1, new NotificationCompat.Builder(CustomApplication.getContext(), "ForegroundService")
-                .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher))
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle("CDR广告系统")
-                .setContentText("请求网络数据的前台服务。")
-                .setWhen(System.currentTimeMillis())
-                .build()
-        );
-
+                .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher)).setSmallIcon(R.mipmap.ic_launcher).setContentTitle("CDR广告系统").setContentText("请求网络数据的前台服务.")
+                .setWhen(System.currentTimeMillis()).build());
         if (mUDPPackProducerThread == null) mUDPPackProducerThread = new UDPPackProducerThread();
         if (mPayloadConsumerThread == null) mPayloadConsumerThread = new PayloadConsumerThread();
         if (mCusDataConsumerThread == null) mCusDataConsumerThread = new CusDataConsumerThread();
@@ -102,6 +96,7 @@ public final class LongRunningUDPService extends Service {
         private static final String TAG = "TAG_PayloadProducerThread";
         private volatile boolean isNeedReceiveUDP;//是否需要接收UDP数据包（没有启动的时候不需要接收）
         private byte[] mUdpPackContainer;
+        private SocketAddress mSocketAddress;
         private DatagramSocket mDatagramSocket;//单播套接字
         private DatagramPacket mDatagramPacket;//单播数据报
 
@@ -114,7 +109,8 @@ public final class LongRunningUDPService extends Service {
                 if (mDatagramSocket == null) {
                     mDatagramSocket = new DatagramSocket(null);
                     mDatagramSocket.setReuseAddress(true);//地址复用
-                    mDatagramSocket.bind(new InetSocketAddress(AppConfig.PORT));//绑定端口
+                    if (mSocketAddress == null) mSocketAddress = new InetSocketAddress(AppConfig.PORT);
+                    mDatagramSocket.bind(mSocketAddress);//绑定端口
                 }
                 if (mDatagramPacket == null) mDatagramPacket = new DatagramPacket(mUdpPackContainer, mUdpPackContainer.length);//建立一个指定缓冲区大小的数据包
                 while (isNeedReceiveUDP) {
@@ -124,8 +120,7 @@ public final class LongRunningUDPService extends Service {
                         mUdpPackContainer = mDatagramPacket.getData();//UDP数据包
                         if ((mUdpPackContainer != null) && (mUdpPackContainer.length > 0)) {
 //                            LogUtil.d(TAG, MessageFormat.format("UDP原始数据包-入队前-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBB:\t\t{0}", stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase(Locale.getDefault())));
-//                            mUDPPackArrayBlockingQueue.put(mUdpPackContainer);//FIXME 是否应该考虑将过滤净荷的逻辑放于出队时
-                            mUDPPackArrayBlockingQueue.offer(mUdpPackContainer);
+                            mUDPPackArrayBlockingQueue.offer(mUdpPackContainer);//FIXME 是否应该考虑将过滤净荷的逻辑放于出队时
                         }
                     } catch (Exception e) {
                         Logger.t(TAG).e(e, "run: ");
@@ -144,6 +139,7 @@ public final class LongRunningUDPService extends Service {
                     mDatagramPacket.setLength(0);
                     mDatagramPacket = null;
                 }
+                mSocketAddress = null;
                 mUdpPackContainer = null;//必须置null
             }
         }
@@ -205,21 +201,20 @@ public final class LongRunningUDPService extends Service {
          *
          * @return 下一个有效的净荷
          */
-        private static byte[] getNextValidPayload() {
+        @Nullable
+        private static byte[] getNextValidPayload() {//FIXME 返回值被用于"Buffer数据拼接"
             try {
-//                            LogUtil.d(TAG, "TS净荷包     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase());
                 if (!mUDPPackArrayBlockingQueue.isEmpty()) {
-//                    byte[] mUdpPackContainer = mUDPPackArrayBlockingQueue.take();
                     byte[] mUdpPackContainer = mUDPPackArrayBlockingQueue.poll();
                     if ((mUdpPackContainer != null) && (mUdpPackContainer.length > 0)) {
 //                        LogUtil.d(TAG, MessageFormat.format("UDP原始数据包-出队后-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBB:\t\t{0}", stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase(Locale.getDefault())));
-                        return parseUDPPacketToPayload(mUdpPackContainer);//FIXME 遇到队列中没有元素的时候,线程会阻塞        取出原始UDP包,解析成"(0~6)*184净荷"并返回
+                        return parseUDPPacketToPayload(mUdpPackContainer);//FIXME 取出原始UDP包,解析成"(0~6)*184净荷"并返回
                     }
                 }
             } catch (Exception e) {
                 Logger.t(TAG).e(e, "getNextValidPayload: ");
             }
-            return new byte[0];//上一个return语句前会阻塞,不会走到这一步!
+            return null;
         }
 
         /**
@@ -233,7 +228,6 @@ public final class LongRunningUDPService extends Service {
             while (true) {//TODO currentCusDataArray 的前1024（长度完全可能小于1024）可能含有文件本身数据 008888(是否可以不用考虑呢?)，1024表示要找到我们一个段长的数据，段的长度就是1024
                 if (currentCusDataArray.length >= AppConfig.CUS_DATA_SIZE) {
                     try {
-//                        mCusDataArrayBlockingQueue.put(Arrays.copyOfRange(currentCusDataArray, 0, AppConfig.CUS_DATA_SIZE));
                         mCusDataArrayBlockingQueue.offer(Arrays.copyOfRange(currentCusDataArray, 0, AppConfig.CUS_DATA_SIZE));
                     } catch (Exception e) {
                         Logger.t(TAG).e(e, "cutOutPayloadArrayAfterHead008888: ");
@@ -246,34 +240,20 @@ public final class LongRunningUDPService extends Service {
         }
 
         /**
-         * 解析接收到的"原始UDP数据包"进而获得"n个(0~6)TS净荷包"（TS包是顺序排放的），我们只需要 0x86 开头的UDP包(广科院协议)
-         * FIXME 已经"分析数据验证,函数严谨"
+         * 解析接收到的"原始UDP数据包"进而获得"n个(0~6)TS净荷包"（TS包是顺序排放的），我们只需要 0x86 开头的UDP包(广科院协议)  FIXME 已经"分析数据验证,函数严谨"
          *
          * @param udpDataPacket 原始的UDP数据报
          * @return "n个TS包的净荷"有序拼接起来的字节数组（长度是 n * 184 n∈[0,6]）
          */
         @Nullable
         private static byte[] parseUDPPacketToPayload(byte[] udpDataPacket) {
-//        if (udpDataPacket == null || udpDataPacket.length < (AppConfig.UDP_PACKET_HEADER_SIZE + AppConfig.UDP_PACKET_TAIL_SIZE)) {
-//            LogUtil.d(TAG, "UDP原始数据包为 null 或 长度小于 21+311,数据不符合要求进而被丢弃!");
-//            return null;
-//        } else if (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE) {
-//            LogUtil.i(TAG, "UDP原始数据包长不是1460,原始数据有问题!");
-//        }
-            {//①原始UDP数据正确性检验
-                if ((udpDataPacket == null) || (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE)) {
-                    LogUtil.e(TAG, "UDP原始数据包为 null 或 长度不是1460,数据不符合要求进而被丢弃!");
-                    return null;
-                }
-                if (udpDataPacket[0] != AppConfig.UDP_HEAD_0x86_VALUE) {//这个0x86是广科院的头，注意与自定义 ELEMENT_TABLE_DISCRIMINATOR 区分开   //TODO 5.筛选出 广科院0x86头 UDP数据报,(如果不是0x86开头的UDP包则抛弃掉)
-                    LogUtil.e(TAG, "UDP原始数据包头不是广科院协议头0x86,不符合要求进而被舍弃!");
-                    return null;
-                }
+            if ((udpDataPacket == null) || (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE) || (udpDataPacket[0] != AppConfig.UDP_HEAD_0x86_VALUE)) {//TODO 5.筛选出 广科院0x86头 UDP数据报
+                LogUtil.e(TAG, "UDP原始数据包为 null 或 长度不是1460 或 不是广科院0x86协议头,数据不符合要求进而被丢弃!");
+                return null;
             }
-
             int lTsPacketAbandonedCount = 0;//被抛弃的ts包的数量
             byte[] lTsPayloadBuffer = new byte[AppConfig.TS_PAYLOAD_NO * AppConfig.TS_PAYLOAD_SIZE];//将用于承载TS净荷的字节数组Buffer 6*184
-            CopyIndex lCopyIndex = new CopyIndex(AppConfig.UDP_PACKET_HEADER_SIZE);//TODO 跳过前21字节头;UDP包以 0x86开头,前21字节是协议头(收到后可以删除)，（1460-21-311=1128字节有效）    1128/6=188（每个TS包）
+            CopyIndex lCopyIndex = new CopyIndex(AppConfig.UDP_PACKET_HEADER_SIZE);//TODO 跳过前21字节头;UDP包以 0x86开头,前21字节是协议头(收到后可以删除),（1460-21-311=1128字节有效）    1128/6=188（每个TS包）-----------------------------------------------------------------------提取为常量必须深度测试
             byte lTSHead, lTSPid1, lTSPid2;//TODO byte[]     取出当前同步字节，看是否等于0x 47 0F FE xx
             for (int i = 0; i < AppConfig.TS_PAYLOAD_NO; i++) {//TODO 循环解析一个UDP包中的6个TS包
                 lTSHead = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
@@ -287,7 +267,7 @@ public final class LongRunningUDPService extends Service {
                 }
                 System.arraycopy(arrayhelpers.GetBytes(udpDataPacket, AppConfig.TS_PAYLOAD_SIZE, lCopyIndex), 0, lTsPayloadBuffer, (i - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE, AppConfig.TS_PAYLOAD_SIZE);
             }
-//        LogUtil.d(TAG, "一个UDP包中全部有效净荷拼接结果:" + stringhelpers.bytesToHexString(Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE)));
+//            LogUtil.d(TAG, "一个UDP包中全部有效净荷拼接结果:" + stringhelpers.bytesToHexString(Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE)));
             return Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE);//TODO 返回每个UDP包中n个有效TS包中的净荷拼接起来的字节数组
         }
     }
@@ -309,9 +289,8 @@ public final class LongRunningUDPService extends Service {
             while (isNeedParsePayloadData) {
                 try {
                     if (!mCusDataArrayBlockingQueue.isEmpty()) {
-//                        parseCustomDataWithHead008888(mCusDataArrayBlockingQueue.take());
                         byte[] lCusDataBuffer = mCusDataArrayBlockingQueue.poll();
-                        if (lCusDataBuffer != null) {
+                        if ((lCusDataBuffer != null) && (lCusDataBuffer.length > 0)) {
                             parseCustomDataWithHead008888(lCusDataBuffer);
                         }
                     }
@@ -396,7 +375,7 @@ public final class LongRunningUDPService extends Service {
             }
             //一切条件都满足:先更新版本号,接着向Map中写入"待接收的元素信息"从而开始解析"元素表"
             sVersionNumberInConfigTable = version_number;//FIXME 在前面全部解析通过后 更新接收到的配置表版本号
-            AppConfig.getLocalBroadcastManager().sendBroadcast(new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST).putExtra(AppConfig.KEY_DELETE_MEDIA_LIST, true));//1.应该先发送广播请求清空分类文件集合
+            AppConfig.getLocalBroadcastManager().sendBroadcast(new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST).putExtra(AppConfig.KEY_DELETE_MEDIA_LIST, true));//1.应该先发送广播"请求清空分类文件集合"
             FileUtils.deleteFilesInDir(AppConfig.FILE_FOLDER);//2.再清空本程序多媒体文件夹下的文件
 
             lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 1 + 1 + 1);
@@ -412,11 +391,10 @@ public final class LongRunningUDPService extends Service {
                 }
                 lCopyIndex.AddIndex(1 + 1 + 1 + 1);
             }//不用判断 element_count == mCDRElementLongSparseArray.size() ?
-            LogUtil.e(TAG, "解析配置表成功!");
+            LogUtil.e(TAG, "################################################ 解析配置表成功! ################################################");
         }
 
 
-        private static final Handler HANDLER = new Handler();
         private static final String[] ELEMENT_FORMAT = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};//.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
 
         /**
@@ -443,9 +421,7 @@ public final class LongRunningUDPService extends Service {
                 return;
             }
             int section_number = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
-//            if (section_number == 20) {
-//                LogUtil.d(TAG, MessageFormat.format("元素表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBB:\t\t{0}\t{1}", mCusDataArrayBlockingQueue.size(), stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
-//            }
+//            if (section_number == 20) LogUtil.d(TAG, MessageFormat.format("元素表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBB:\t\t{0}\t{1}", mCusDataArrayBlockingQueue.size(), stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
             int section_count = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
             if (section_number >= section_count) {
                 LogUtil.e(TAG, "接收到的元素表中解析出 当前段号 大于等于 段数量,退出元素表解析操作.");
@@ -489,10 +465,9 @@ public final class LongRunningUDPService extends Service {
                 return;
             }
 
-            //TODO 将当前元素段中解析出的文件数据写入磁盘
-            String lFileName = MessageFormat.format("{0}{1}", element_guid, ELEMENT_FORMAT[element_format]);
-            File lFile = new File(AppConfig.FILE_FOLDER, lFileName);
-            FileUtils.createOrExistsFile(lFile);
+            //FIXME 将当前元素段中解析出的文件数据写入磁盘
+            File lFile = new File(AppConfig.FILE_FOLDER, MessageFormat.format("{0}{1}", element_guid, ELEMENT_FORMAT[element_format]));
+            FileUtils.createOrExistsFile(lFile);//判断文件是否存在,不存在则创建文件
             try (RandomAccessFile lRandomAccessFile = new RandomAccessFile(lFile, "rw")) {
                 lRandomAccessFile.seek(section_number * 998L);//偏移工作(断点续写):(AppConfig.CUS_DATA_SIZE - (AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 4 + 1 + 1 + 4 + 4)) = 998
                 lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 4 + 1 + 1 + 4);
@@ -502,15 +477,15 @@ public final class LongRunningUDPService extends Service {
 
                 sSectionsNumberList.add(section_number);
                 if (sSectionsNumberList.size() == section_count) {
-                    LogUtil.i(TAG, MessageFormat.format("########################################################## 当前文件\t\t{0}\t\t接收完成 ##########################################################", lFileName));
-                    HANDLER.postDelayed(() -> AppConfig.getLocalBroadcastManager().sendBroadcast(new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST).putExtra("filePath", lFile.getName())), 500);//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
+                    LogUtil.i(TAG, MessageFormat.format("########################################################## 当前文件\t\t{0}\t\t接收完成 ##########################################################", lFile.getName()));
+                    AppConfig.getLocalBroadcastManager().sendBroadcast(new Intent(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST).putExtra(AppConfig.KEY_FILE_NAME, lFile.getName()));//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
                 }
             } catch (Exception e) {
                 Logger.t(TAG).e(e, "parseSectionData0: ");
             }
         }
 
-        private static final CopyIndex sCopyIndex = new CopyIndex(0);
+        private static final CopyIndex sCopyIndex = new CopyIndex(0);//FIXME 被参考将上面解析UDP成净荷的 CopyIndex 改造成常量
 
         /**
          * 自定义的计算CRC的方法

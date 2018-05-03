@@ -10,6 +10,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.text.MessageFormat;
 import java.util.Arrays;
+import java.util.Objects;
 
 /**
  * App配置文件
@@ -17,8 +18,8 @@ import java.util.Arrays;
 public final class AppConfig {
     private static final String TAG = "TAG_AppConfig";
     public static final int PORT = 8080;//服务器端口
-    public static final int ARRAY_BLOCKING_QUEUE_CAPACITY = 20000;
-    // 21+188*6+311=1460
+    public static final int ARRAY_BLOCKING_QUEUE_CAPACITY = 20 * 1000;//阻塞队列容量
+    // 21 + 188 * 6 + 311 = 1460
     public static final int UDP_PACKET_HEADER_SIZE = 21;//UDP包头长度
     public static final int TS_PAYLOAD_NO = 6;
     public static final int TS_PACKET_SIZE = 188;
@@ -27,7 +28,7 @@ public final class AppConfig {
     public static final int UDP_PACKET_SIZE = 1460;//UDP包的大小（广科院给的UDP原始包大小就是1460字节）
     public static final int CUS_DATA_SIZE = 1024;//自定义数据长度
     public static final byte UDP_HEAD_0x86_VALUE = (byte) 0x86;//广科院UDP头 0x86
-    public static final byte TS_HEAD_0x47_VALUE = (byte) 0x47;//广科院TS头 0x47
+    public static final byte TS_HEAD_0x47_VALUE = (byte) 0x47; //广科院TS头 0x47
 
     public static final byte ELEMENT_TABLE_DISCRIMINATOR = (byte) 0x86;//元素表区别符
     public static final byte CONFIG_TABLE_DISCRIMINATOR = (byte) 0x87; //配置表区别符
@@ -35,11 +36,12 @@ public final class AppConfig {
 
     public static final String LINE_HEAD = "\t\t\t\t\t\t";
     public static final String FORM_FEED_CHARACTER = "\n\n\n\n\n";
-    public static final String FILE_FOLDER = CustomApplication.getContext().getExternalCacheDir().getAbsolutePath();//存放本程序多媒体文件的目录
+    public static final String FILE_FOLDER = Objects.requireNonNull(CustomApplication.getContext().getExternalCacheDir()).getAbsolutePath();//存放本程序多媒体文件的目录
     public static final byte[] sHead008888Array = {(byte) 0x00, (byte) 0x88, (byte) 0x88};//自定义协议头0x 008888 头
 
-    public static final String LOAD_FILE_OR_DELETE_MEDIA_LIST = "com.dexin.ad_system.LOAD_FILE_OR_DELETE_MEDIA_LIST";
+    public static final String LOAD_FILE_OR_DELETE_MEDIA_LIST = "LOAD_FILE_OR_DELETE_MEDIA_LIST";
     public static final String KEY_DELETE_MEDIA_LIST = "KEY_DELETE_MEDIA_LIST";
+    public static final String KEY_FILE_NAME = "KEY_FILE_NAME";
 
     private static final class LocalBroadcastManagerHolder {
         private static final LocalBroadcastManager LOCAL_BROADCAST_MANAGER = LocalBroadcastManager.getInstance(CustomApplication.getContext());

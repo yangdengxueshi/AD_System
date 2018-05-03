@@ -57,7 +57,6 @@ import permissions.dispatcher.OnShowRationale;
 import permissions.dispatcher.PermissionRequest;
 import permissions.dispatcher.RuntimePermissions;
 
-//TODO IP地址和端口号设置在SP中，当SP发生改变的时候执行onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key)方法
 @RuntimePermissions
 public class MainActivity extends AppCompatActivity {
     private static final int FLAG_HOMEKEY_DISPATCHED = 0x80000000;//HOME键分发标志
@@ -143,6 +142,11 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    @NonNull
+    public static Intent createIntent(Context context) {
+        return new Intent(context, MainActivity.class);
+    }
+
     @NeedsPermission({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
     void requestSDCardPermissionAndLaunchApp() {//在需要获取权限的地方注释
         if (AppConfig.getSPUtils().getBoolean("isFirstLaunch", true)) {//第一次启动App程序
@@ -158,12 +162,7 @@ public class MainActivity extends AppCompatActivity {
 
     @OnShowRationale({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
     void showSDCardPermissionRationale(PermissionRequest request) {//提示用户为何要开启SD卡读写权限
-        new AlertDialog.Builder(MainActivity.this)
-                .setMessage("程序媒体文件操作依赖于对SD卡的读写!")
-                .setPositiveButton("确定", (dialog, which) -> {
-                    request.proceed();//再次执行权限请求
-                })
-                .show();
+        new AlertDialog.Builder(MainActivity.this).setMessage("程序媒体文件操作依赖于对SD卡的读写!").setPositiveButton("确定", (dialog, which) -> request.proceed()).show();//再次执行权限请求
     }
 
     @OnPermissionDenied({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
@@ -206,8 +205,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        //屏蔽掉 Back键 和 Home键
-        switch (keyCode) {
+        switch (keyCode) {//屏蔽掉 Back键 和 Home键
             case KeyEvent.KEYCODE_BACK:
                 return true;
             case KeyEvent.KEYCODE_HOME:
@@ -230,6 +228,8 @@ public class MainActivity extends AppCompatActivity {
 */
         //TODO 三、广播
         mLocalCDRBroadcastReceiver = new LocalCDRBroadcastReceiver();
+
+
         AppConfig.getLocalBroadcastManager().registerReceiver(mLocalCDRBroadcastReceiver, new IntentFilter(AppConfig.LOAD_FILE_OR_DELETE_MEDIA_LIST));
 
         //TODO 五、创建WifiLock和MulticastLock(Wifi锁 和 多播锁)
@@ -270,10 +270,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             etPort.setText("");
         }
-        new AlertDialog.Builder(this)
-                .setIcon(R.drawable.icon_settings)
-                .setTitle("服务器IP与端口配置")
-                .setView(tlConfig)
+        new AlertDialog.Builder(this).setIcon(R.drawable.icon_settings).setTitle("服务器IP与端口配置").setView(tlConfig)
                 .setNegativeButton("取消", (dialog, which) -> {
                 })
                 .setPositiveButton("确定", (dialog, which) -> {//TODO 此处可执行逻辑处理
@@ -304,10 +301,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
         getMenuInflater().inflate(R.menu.menu_context, menu);
-
         menu.setHeaderTitle("程序设置");
         menu.setHeaderIcon(R.drawable.icon_settings);
-
         super.onCreateContextMenu(menu, v, menuInfo);
     }
 
@@ -349,6 +344,7 @@ public class MainActivity extends AppCompatActivity {
      * @param txtFilePathList 文本文件路径列表
      * @return 所有文本文件中文字的拼接
      */
+    @NonNull
     private String loadText(List<String> txtFilePathList) {
         StringBuilder content = new StringBuilder();
         try {
@@ -438,7 +434,7 @@ public class MainActivity extends AppCompatActivity {
 
                 mMediaPlayer.reset();
             } else {                                //否则    传递的是文件路径，在这里获取文件路径
-                filePath = AppConfig.FILE_FOLDER + "/" + intent.getStringExtra("filePath");
+                filePath = AppConfig.FILE_FOLDER + "/" + intent.getStringExtra(AppConfig.KEY_FILE_NAME);
             }
 
             if (filePath.endsWith(".png") || filePath.endsWith(".bmp") || filePath.endsWith(".jpg") || filePath.endsWith(".gif")) {     //1.显示图片
@@ -452,14 +448,12 @@ public class MainActivity extends AppCompatActivity {
                     loadLanternSlideImage();            //加载幻灯片,只用调用一次也只能调用一次
                     isSlideShowImage = true;
                 }
-
                 Toast.makeText(CustomApplication.getContext(), "收到    图片", Toast.LENGTH_LONG).show();
             } else if (filePath.endsWith(".txt")) {
                 //2.显示文字
                 txtList.add(filePath);
 //                vmtvDetail.setText(AppConfig.LINE_HEAD + loadText(txtList));
                 mTvDetail.setText(MessageFormat.format("{0}{1}", AppConfig.LINE_HEAD, loadText(txtList)));
-
                 Toast.makeText(CustomApplication.getContext(), "收到    文字", Toast.LENGTH_LONG).show();
             } else if (filePath.endsWith(".mp3") || filePath.endsWith(".wav")) {                                                        //4.播放音乐
                 initMediaPlayerAndPlayMusic(filePath);
@@ -473,10 +467,8 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 }, 5000, 10000);
-
                 Toast.makeText(CustomApplication.getContext(), "收到    音频", Toast.LENGTH_LONG).show();
             } else if (filePath.endsWith(".avi") || filePath.endsWith(".mp4") || filePath.endsWith(".rmvb") || filePath.endsWith(".wmv") || filePath.endsWith(".3gp")) {    //3.显示视频
-
                 Toast.makeText(CustomApplication.getContext(), "收到    视频", Toast.LENGTH_LONG).show();
             }
         }
