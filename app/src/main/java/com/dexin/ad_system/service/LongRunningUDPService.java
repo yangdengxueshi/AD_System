@@ -31,6 +31,7 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -62,15 +63,32 @@ public final class LongRunningUDPService extends Service {
 
         Intent S_CONFIG_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);
         Intent S_ELEMENT_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);
+        List<String> lFileNameList = new ArrayList<>();
+//        lFileNameList.add("111.txt");
+//        lFileNameList.add("222.txt");
+//        lFileNameList.add("333.txt");
+//        lFileNameList.add("111.jpg");
+//        lFileNameList.add("222.ipg");
+//        lFileNameList.add("333.jpg");
+        lFileNameList.add("111.mp3");
+        lFileNameList.add("222.mp3");
+        lFileNameList.add("333.mp3");
         Handler lHandler = new Handler();
-        lHandler.post(new Runnable() {
+        lHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                AppConfig.getLocalBroadcastManager().sendBroadcast(S_ELEMENT_TABLE_INTENT.putExtra(AppConfig.KEY_FILE_NAME, lFileNameList.get((int) (Math.random() * lFileNameList.size()))));//1.应该先发送广播"请求清空分类文件集合"
+                lHandler.postDelayed(this, 5000);
+            }
+        }, 5000);
+
+        lHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 AppConfig.getLocalBroadcastManager().sendBroadcast(S_CONFIG_TABLE_INTENT);//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
-                AppConfig.getLocalBroadcastManager().sendBroadcast(S_ELEMENT_TABLE_INTENT.putExtra(AppConfig.KEY_FILE_NAME, MessageFormat.format("\t\t{0}", String.valueOf(System.currentTimeMillis()))));//1.应该先发送广播"请求清空分类文件集合"
-                lHandler.postDelayed(this, 5000);
+                lHandler.postDelayed(this, 120 * 1000);
             }
-        });
+        }, 120 * 1000);
     }
 
     @Override
@@ -391,7 +409,7 @@ public final class LongRunningUDPService extends Service {
             //一切条件都满足:先更新版本号,接着向Map中写入"待接收的元素信息"从而开始解析"元素表"
             sVersionNumberInConfigTable = version_number;//FIXME 在前面全部解析通过后 更新接收到的配置表版本号
             AppConfig.getLocalBroadcastManager().sendBroadcast(S_CONFIG_TABLE_INTENT);//1.应该先发送广播"请求清空分类文件集合"
-            FileUtils.deleteFilesInDir(AppConfig.FILE_FOLDER);//2.再清空本程序多媒体文件夹下的文件
+            FileUtils.deleteFilesInDir(AppConfig.MEDIA_FILE_FOLDER);//2.再清空本程序多媒体文件夹下的文件
 
             lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 1 + 1 + 1);
             long lElementGuid;
@@ -482,7 +500,7 @@ public final class LongRunningUDPService extends Service {
             }
 
             //FIXME 将当前元素段中解析出的文件数据写入磁盘
-            File lFile = new File(AppConfig.FILE_FOLDER, MessageFormat.format("{0}{1}", element_guid, ELEMENT_FORMAT[element_format]));
+            File lFile = new File(AppConfig.MEDIA_FILE_FOLDER, MessageFormat.format("{0}{1}", element_guid, ELEMENT_FORMAT[element_format]));
             FileUtils.createOrExistsFile(lFile);//判断文件是否存在,不存在则创建文件
             try (RandomAccessFile lRandomAccessFile = new RandomAccessFile(lFile, "rw")) {
                 lRandomAccessFile.seek(section_number * 998L);//偏移工作(断点续写):(AppConfig.CUS_DATA_SIZE - (AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 4 + 1 + 1 + 4 + 4)) = 998

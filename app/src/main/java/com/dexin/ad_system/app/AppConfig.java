@@ -1,5 +1,9 @@
 package com.dexin.ad_system.app;
 
+import android.app.Activity;
+import android.app.Application;
+import android.app.Service;
+import android.support.v4.app.Fragment;
 import android.support.v4.content.LocalBroadcastManager;
 
 import com.blankj.utilcode.util.SPUtils;
@@ -34,9 +38,7 @@ public final class AppConfig {
     public static final byte CONFIG_TABLE_DISCRIMINATOR = (byte) 0x87; //配置表区别符
     public static final int TABLE_DISCRIMINATOR_INDEX = 4;//表区别符索引位置
 
-    public static final String LINE_HEAD = "\t\t\t\t\t\t";
-    public static final String FORM_FEED_CHARACTER = "\n\n\n\n\n";
-    public static final String FILE_FOLDER = Objects.requireNonNull(CustomApplication.getContext().getExternalCacheDir()).getAbsolutePath();//存放本程序多媒体文件的目录
+    public static final String MEDIA_FILE_FOLDER = Objects.requireNonNull(CustomApplication.getContext().getExternalCacheDir()).getAbsolutePath();//存放本程序多媒体文件的目录
     public static final byte[] sHead008888Array = {(byte) 0x00, (byte) 0x88, (byte) 0x88};//自定义协议头0x 008888 头
 
     public static final String ACTION_RECEIVE_CONFIG_TABLE = "ACTION_RECEIVE_CONFIG_TABLE";//收到配置表
@@ -45,6 +47,28 @@ public final class AppConfig {
 
     private static final class LocalBroadcastManagerHolder {
         private static final LocalBroadcastManager LOCAL_BROADCAST_MANAGER = LocalBroadcastManager.getInstance(CustomApplication.getContext());
+    }
+
+    /**
+     * 判断组件状态是否 活跃      //FIXME 还可以考虑使用“多态”来进行封装（待续）
+     *
+     * @return 组件状态
+     */
+    public static boolean isComponentAlive(Object component) {
+        if (component instanceof Application) {
+            Application application = (Application) component;
+            return !application.isRestricted();
+        } else if (component instanceof Activity) {
+            Activity activity = (Activity) component;
+            return !activity.isFinishing() && !activity.isDestroyed() && !activity.isRestricted();
+        } else if (component instanceof Fragment) {
+            Fragment fragment = (Fragment) component;
+            return !fragment.isHidden() && !fragment.isRemoving() && !fragment.isDetached();
+        } else if (component instanceof Service) {
+            Service service = (Service) component;
+            return !service.isRestricted();
+        }
+        return false;
     }
 
     /**

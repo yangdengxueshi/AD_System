@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout
+<merge
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_main"
     android:keepScreenOn="true"
     tools:context="com.dexin.ad_system.activity.MainActivity">
 
@@ -14,32 +13,17 @@
         android:layout_height="match_parent"
         android:layout_gravity="center">
 
-        <ImageView
-            android:id="@+id/iv_show"
+        <com.zhouwei.mzbanner.MZBannerView
+            android:id="@+id/mzbv_lantern_slide_view"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:contentDescription="@null"
-            android:scaleType="fitXY"/>
+            app:canLoop="true"/>
 
-        <!--
-                <android.lib.widget.verticalmarqueetextview.VerticalMarqueeTextView
-                    android:id="@+id/vm_tv_detail"
-                    android:layout_gravity="bottom|center_horizontal"
-                    android:layout_margin="15dp"
-                    app:layout_heightPercent="25%"
-                    app:layout_widthPercent="99%"
-                    app:mTextColor="#32CD32"
-                    app:marqueeSpeed="30"
-                    app:textStyle="bold"/>
-        -->
-        <TextView
-            android:id="@+id/tv_detail"
+        <com.vondear.rxtools.view.RxTextViewVerticalMore
+            android:id="@+id/tvvm_txt"
             android:layout_gravity="bottom|center_horizontal"
             android:layout_margin="15dp"
-            android:textColor="#32CD32"
-            android:textSize="50sp"
-            android:textStyle="bold"
-            app:layout_heightPercent="25%"
+            app:layout_heightPercent="26%"
             app:layout_widthPercent="99%"/>
     </android.support.percent.PercentFrameLayout>
 
@@ -54,4 +38,4 @@
         android:id="@+id/v_menu"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
-</FrameLayout>
+</merge>

@@ -5,8 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.media.MediaPlayer;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
@@ -30,12 +29,19 @@ import android.widget.VideoView;
 
 import com.blankj.utilcode.util.FileUtils;
 import com.blankj.utilcode.util.RegexUtils;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.dexin.ad_system.R;
 import com.dexin.ad_system.app.AppConfig;
 import com.dexin.ad_system.app.CustomApplication;
 import com.dexin.ad_system.service.LongRunningUDPService;
+import com.orhanobut.logger.Logger;
 import com.vondear.rxtools.RxBarTool;
+import com.vondear.rxtools.view.RxTextViewVerticalMore;
 import com.vondear.rxtools.view.RxToast;
+import com.zhouwei.mzbanner.MZBannerView;
+import com.zhouwei.mzbanner.holder.MZHolderCreator;
+import com.zhouwei.mzbanner.holder.MZViewHolder;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -62,34 +68,23 @@ import permissions.dispatcher.RuntimePermissions;
 public class MainActivity extends AppCompatActivity {
     private static final int FLAG_HOMEKEY_DISPATCHED = 0x80000000;//HOME键分发标志
 
-    @BindView(R.id.iv_show)
-    ImageView mIvShow;
-    @BindView(R.id.tv_detail)
-    TextView mTvDetail;
+    @BindView(R.id.mzbv_lantern_slide_view)
+    MZBannerView mMzbvLanternSlideView;
+    @BindView(R.id.tvvm_txt)
+    RxTextViewVerticalMore mTvvmTxt;
     @BindView(R.id.vv_video)
     VideoView mVvVideo;
     @BindView(R.id.v_menu)
     View mVMenu;
-    //    private VerticalMarqueeTextView vmtvDetail;
 
-    //TODO 三、广播
-    private DataTableReceiver mDataTableReceiver;      //TODO UDP接收器广播,当缓存完成时调用
+    private DataTableReceiver mDataTableReceiver;//FIXME 数据表接收器广播
 
-    //TODO 五、创建WifiLock和MulticastLock
+    //FIXME 五、创建 WiFi锁 和 多播锁
     private WifiManager.WifiLock mWifiLock;
     private WifiManager.MulticastLock mMulticastLock;
 
-    //TODO 六、自定义变量
-    //1.图
-    private final List<String> imageList = new ArrayList<>();
-    private final List<String> txtList = new ArrayList<>();
-    private final Timer mTimer = new Timer();
-    private int currentImageIndex;
-    private boolean isSlideShowImage;   //程序一加载并没有正在播放幻灯片(图片)
-    private final MediaPlayer mMediaPlayer = new MediaPlayer();
-
-    //TODO 七、自定义Handler
-    private final CustomHandler mCustomHandler = new CustomHandler(MainActivity.this);//声明为final
+    private final MediaPlayer mMediaPlayer = new MediaPlayer();//音乐播放器
+    private final CustomHandler mCustomHandler = new CustomHandler(MainActivity.this);//自定义Handler
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,11 +104,15 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        mMzbvLanternSlideView.start();
         registerForContextMenu(mVMenu);
     }
 
     @Override
     protected void onPause() {
+        mMzbvLanternSlideView.pause();
+        mTvvmTxt.stopFlipping();
+        mTvvmTxt.removeAllViews();
         mVvVideo.suspend();
         super.onPause();
     }
@@ -125,21 +124,15 @@ public class MainActivity extends AppCompatActivity {
         AppConfig.getLocalBroadcastManager().unregisterReceiver(mDataTableReceiver);
         mCustomHandler.removeCallbacksAndMessages(null);
 
-
         //释放WifiLock和MulticastLock
-        if (mWifiLock.isHeld()) mWifiLock.release();
-        if (mMulticastLock.isHeld()) mMulticastLock.release();
+        if ((mWifiLock != null) && mWifiLock.isHeld()) mWifiLock.release();
+        if ((mMulticastLock != null) && mMulticastLock.isHeld()) mMulticastLock.release();
 
-        //释放MediaPlayer
-        if (mMediaPlayer != null) {
-            mMediaPlayer.stop();
-            mMediaPlayer.release();
-        }
+        //释放 音乐播放器
+        mMediaPlayer.stop();
+        mMediaPlayer.release();
 
-        //暂停视频
-        if (mVvVideo != null) {
-            mVvVideo.suspend();
-        }
+        if (mVvVideo != null) mVvVideo.suspend();//暂停视频
         super.onDestroy();
     }
 
@@ -153,7 +146,7 @@ public class MainActivity extends AppCompatActivity {
         if (AppConfig.getSPUtils().getBoolean("isFirstLaunch", true)) {//第一次启动App程序
             setServerIP_Port();//设置IP地址和端口号后（再开启服务）
         } else {//直接开启服务
-            FileUtils.createOrExistsDir(AppConfig.FILE_FOLDER);//先创建本程序的媒体文件夹 "/AD_System"
+            FileUtils.createOrExistsDir(AppConfig.MEDIA_FILE_FOLDER);//先创建本程序的媒体文件夹 "/AD_System"
             //先停止、再启动Service
             stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
             startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
@@ -219,29 +212,22 @@ public class MainActivity extends AppCompatActivity {
      * 初始化成员变量
      */
     private void initMemberVar() {
-/*
-        {
-            vmtvDetail = findViewById(R.id.vm_tv_detail);
-            vmtvDetail.setFadingEdgeLength(3);
-            ((TextView) vmtvDetail.getChildAt(0)).setGravity(View.TEXT_ALIGNMENT_TEXT_START);
-            ((TextView) vmtvDetail.getChildAt(0)).setTextSize(52);                                  //TODO 触控一体机设置52,手机设置32
-        }
-*/
-        //TODO 三、广播
+        //FIXME UI
+        mMzbvLanternSlideView.setDelayedTime(8000);
+        mTvvmTxt.setFlipInterval(8000);
+        //FIXME 三、广播
         mDataTableReceiver = new DataTableReceiver();
-
         IntentFilter lIntentFilter = new IntentFilter();
         lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);//收到配置表
         lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);//收到元素表
         AppConfig.getLocalBroadcastManager().registerReceiver(mDataTableReceiver, lIntentFilter);
 
-        //TODO 五、创建WifiLock和MulticastLock(Wifi锁 和 多播锁)
+        //TODO 五、创建 Wifi锁 和 多播锁
         WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
         if (manager != null) {
-            mWifiLock = manager.createWifiLock("UDP_Wifi_Lock");
-            mMulticastLock = manager.createMulticastLock("UDP_Multicast_Lock");
-            //获得WifiLock和MulticastLock
-            mWifiLock.acquire();
+            mWifiLock = manager.createWifiLock("Wifi_Lock");
+            mMulticastLock = manager.createMulticastLock("Multicast_Lock");
+            mWifiLock.acquire();//获得WifiLock和MulticastLock
             mMulticastLock.acquire();
         }
     }
@@ -321,78 +307,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 加载幻灯片(图片)
-     */
-    private void loadLanternSlideImage() {
-        if (imageList.size() > 0) {
-            mTimer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    currentImageIndex++;
-                    if (currentImageIndex >= imageList.size()) currentImageIndex = 0;
-                    mCustomHandler.post(() -> {
-                        if (imageList.size() > 0) {
-                            Bitmap bitmap = BitmapFactory.decodeFile(imageList.get(currentImageIndex));
-                            mIvShow.setImageBitmap(bitmap);
-                        }
-                    });
-                }
-            }, 8000, 8000);
-        }
-    }
-
-    /**
-     * 根据文本文件路径的列表加载文字
-     *
-     * @param txtFilePathList 文本文件路径列表
-     * @return 所有文本文件中文字的拼接
-     */
-    @NonNull
-    private String loadText(List<String> txtFilePathList) {
-        StringBuilder content = new StringBuilder();
-        try {
-            if (txtFilePathList.size() > 0) {
-                for (int i = 0; i < txtFilePathList.size(); i++) {
-                    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(txtFilePathList.get(i))));
-                    String line;
-                    while ((line = bufferedReader.readLine()) != null) {
-                        content.append(line);
-                    }
-                    if (i != txtFilePathList.size() - 1) {
-                        content.append(AppConfig.FORM_FEED_CHARACTER + AppConfig.LINE_HEAD);
-                    }
-                    bufferedReader.close();
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return content.toString();
-    }
-
-    /**
-     * 初始化MediaPlayer 并且 播放音乐
-     *
-     * @param filePath 音乐文件路径
-     */
-    private void initMediaPlayerAndPlayMusic(String filePath) {
-        if (mMediaPlayer.isPlaying()) {
-            return;
-        }
-        File musicFile = new File(filePath);
-        if (musicFile.exists()) {                  //不是文件夹，而是音乐文件
-            try {
-                mMediaPlayer.reset();
-                mMediaPlayer.setDataSource(filePath);
-                mMediaPlayer.prepare();
-                mMediaPlayer.start();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    /**
      * 播放视频
      *
      * @param filePath 视频文件路径
@@ -421,62 +335,152 @@ public class MainActivity extends AppCompatActivity {
     /**
      * FIXME 数据表接收器
      */
-    public class DataTableReceiver extends BroadcastReceiver {
+    private final class DataTableReceiver extends BroadcastReceiver {
+        private static final String TAG = "TAG_DataTableReceiver";
+        private String mFilePath;
+        private final List<String> mFilePathList = new ArrayList<>(); //"文件路径"列表
+        private final List<String> mImagePathList = new ArrayList<>();//"图片路径"列表
+        private final List<String> mTxtPathList = new ArrayList<>();  //"文本路径"列表
+        private final MZHolderCreator mMZLanternSlideHolderCreator = MZBVLanternSlideViewHolder::new;
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent != null) {
+            if (AppConfig.isComponentAlive(MainActivity.this) && (intent != null)) {
                 switch (Objects.requireNonNull(intent.getAction())) {
-                    case AppConfig.ACTION_RECEIVE_CONFIG_TABLE://1.收到"新版本的配置表"
-                        imageList.clear();
-                        mIvShow.setImageResource(R.drawable.bg_main);
+                    case AppConfig.ACTION_RECEIVE_CONFIG_TABLE://1.收到"新版本的配置表":
+                        RxToast.info("接收新数据中,清除原数据!");
+                        //①释放图片资源
+                        mMzbvLanternSlideView.pause();
+                        mMzbvLanternSlideView.setVisibility(View.GONE);
+                        mImagePathList.clear();
 
-                        txtList.clear();
-//                        vmtvDetail.setText("");
-                        mTvDetail.setText("");
+                        //②释放文本资源
+                        mTvvmTxt.stopFlipping();
+                        mTvvmTxt.removeAllViews();
+                        mTxtPathList.clear();
 
+                        //③释放音乐资源
                         mMediaPlayer.reset();
+
+                        //④释放视频资源
+
+                        //⑤释放公共资源
+                        mFilePathList.clear();
                         break;
                     case AppConfig.ACTION_RECEIVE_ELEMENT_TABLE://2.收到"新版本的元素表":
-                        String filePath = AppConfig.FILE_FOLDER + "/" + intent.getStringExtra(AppConfig.KEY_FILE_NAME);
+                        mFilePath = MessageFormat.format("{0}/{1}", AppConfig.MEDIA_FILE_FOLDER, intent.getStringExtra(AppConfig.KEY_FILE_NAME));
+                        if (!isFileExists(mFilePath)) break;
+                        if (!mFilePathList.contains(mFilePath)) {
+                            mFilePathList.add(mFilePath);
+                        } else {
+                            break;
+                        }
 
-                        if (filePath.endsWith(".png") || filePath.endsWith(".bmp") || filePath.endsWith(".jpg") || filePath.endsWith(".gif")) {     //1.显示图片
-                            //1.显示图片
-                            Bitmap bitmap = BitmapFactory.decodeFile(filePath);
-                            mIvShow.setImageBitmap(bitmap);
-
-                            imageList.add(filePath);
-                            currentImageIndex = imageList.indexOf(filePath);
-                            if (!isSlideShowImage) {                //没有播放幻灯片(图片)，则开始播放幻灯片
-                                loadLanternSlideImage();            //加载幻灯片,只用调用一次也只能调用一次
-                                isSlideShowImage = true;
+                        if (mFilePath.endsWith(".png") || mFilePath.endsWith(".bmp") || mFilePath.endsWith(".jpg") || mFilePath.endsWith(".gif")) {     //①播放幻灯片
+                            mMzbvLanternSlideView.pause();//始终先释放资源
+                            if (mMzbvLanternSlideView.getVisibility() == View.GONE) mMzbvLanternSlideView.setVisibility(View.VISIBLE);
+                            mImagePathList.add(0, mFilePath);
+                            mMzbvLanternSlideView.setPages(mImagePathList, mMZLanternSlideHolderCreator);
+                            if (mImagePathList.size() > 1) mMzbvLanternSlideView.start();//再根据情况开启
+                            RxToast.info("收到    图片");
+                        } else if (mFilePath.endsWith(".txt")) {                                                                                        //②播放文字
+                            mTvvmTxt.stopFlipping();//始终先释放资源
+                            mTvvmTxt.removeAllViews();
+                            mTxtPathList.add(0, mFilePath);
+                            List<View> lViewList = new ArrayList<>();
+                            for (String txtPath : mTxtPathList) {
+                                TextView lTvFlipping = new TextView(CustomApplication.getContext());
+                                lTvFlipping.setTextSize(60F);
+                                lTvFlipping.setTextColor(Color.GREEN);
+                                lTvFlipping.setText(loadText(txtPath));
+                                lViewList.add(lTvFlipping);
                             }
-                            Toast.makeText(CustomApplication.getContext(), "收到    图片", Toast.LENGTH_LONG).show();
-                        } else if (filePath.endsWith(".txt")) {
-                            //2.显示文字
-                            txtList.add(filePath);
-//                            vmtvDetail.setText(AppConfig.LINE_HEAD + loadText(txtList));
-                            mTvDetail.setText(MessageFormat.format("{0}{1}", AppConfig.LINE_HEAD, loadText(txtList)));
-                            Toast.makeText(CustomApplication.getContext(), "收到    文字", Toast.LENGTH_LONG).show();
-                        } else if (filePath.endsWith(".mp3") || filePath.endsWith(".wav")) {                                                        //4.播放音乐
-                            initMediaPlayerAndPlayMusic(filePath);
-
-                            mTimer.schedule(new TimerTask() {
+                            mTvvmTxt.setViews(lViewList);
+                            RxToast.info("收到    文字");
+                        } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                          //③播放音乐
+                            mCustomHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
-                                    if (!mMediaPlayer.isPlaying()) {
-                                        initMediaPlayerAndPlayMusic(filePath);
-                                    }
+                                    initMediaPlayerAndPlayMusic(mFilePath);
+                                    mCustomHandler.postDelayed(this, 10 * 1000);
                                 }
-                            }, 5000, 10000);
-                            Toast.makeText(CustomApplication.getContext(), "收到    音频", Toast.LENGTH_LONG).show();
-                        } else if (filePath.endsWith(".avi") || filePath.endsWith(".mp4") || filePath.endsWith(".rmvb") || filePath.endsWith(".wmv") || filePath.endsWith(".3gp")) {    //3.显示视频
-                            Toast.makeText(CustomApplication.getContext(), "收到    视频", Toast.LENGTH_LONG).show();
+                            });
+                            RxToast.info("收到    音频");
+                        } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb") || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {    //④显示视频
+                            RxToast.info("收到    视频");
                         }
                         break;
                     default:
                 }
             }
+        }
+
+        /**
+         * 根据文本文件路径加载文字
+         *
+         * @param txtFilePath 文本文件路径
+         * @return 文本文件中的文字
+         */
+        @NonNull
+        private String loadText(String txtFilePath) {
+            StringBuilder lStringBuilder = new StringBuilder("        ");
+            BufferedReader lBufferedReader = null;
+            try {
+                lBufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(txtFilePath)));
+                String lLineTxt;
+                while ((lLineTxt = lBufferedReader.readLine()) != null) {
+                    lStringBuilder.append(lLineTxt);
+                }
+            } catch (Exception e) {
+                Logger.t(TAG).e(e, "loadText: ");
+            } finally {
+                try {
+                    if (lBufferedReader != null) lBufferedReader.close();
+                } catch (Exception e) {
+                    Logger.t(TAG).e(e, "loadText: ");
+                }
+            }
+            return lStringBuilder.toString();
+        }
+
+        /**
+         * 初始化MediaPlayer 并且 播放音乐
+         *
+         * @param musicFilePath 音乐文件路径
+         */
+        private void initMediaPlayerAndPlayMusic(String musicFilePath) {
+            if (mMediaPlayer.isPlaying()) return;
+            try {
+                mMediaPlayer.reset();
+                mMediaPlayer.setDataSource(musicFilePath);
+                mMediaPlayer.prepare();
+                mMediaPlayer.start();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        private boolean isFileExists(String filePath) {
+            File lFile = new File(filePath);
+            return lFile.exists();
+        }
+    }
+
+    private static final class MZBVLanternSlideViewHolder implements MZViewHolder<String> {
+        private ImageView mIvLanternSlideItem;
+
+        @Override//返回页面布局
+        public View createView(Context context) {
+            if (mIvLanternSlideItem == null) {
+                mIvLanternSlideItem = new ImageView(CustomApplication.getContext());
+                mIvLanternSlideItem.setScaleType(ImageView.ScaleType.FIT_XY);
+            }
+            return mIvLanternSlideItem;
+        }
+
+        @Override//绑定数据
+        public void onBind(Context context, int position, String imagePath) {
+            Glide.with(context).load(imagePath).diskCacheStrategy(DiskCacheStrategy.RESULT).skipMemoryCache(true).into(mIvLanternSlideItem);
         }
     }
 }
