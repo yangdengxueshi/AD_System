@@ -69,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int FLAG_HOMEKEY_DISPATCHED = 0x80000000;//HOME键分发标志
 
     @BindView(R.id.mzbv_lantern_slide_view)
-    MZBannerView mMzbvLanternSlideView;
+    MZBannerView<String> mMzbvLanternSlideView;
     @BindView(R.id.tvvm_txt)
     RxTextViewVerticalMore mTvvmTxt;
     @BindView(R.id.vv_video)
@@ -77,13 +77,6 @@ public class MainActivity extends AppCompatActivity {
     @BindView(R.id.v_menu)
     View mVMenu;
 
-    private DataTableReceiver mDataTableReceiver;//FIXME 数据表接收器广播
-
-    //FIXME 五、创建 WiFi锁 和 多播锁
-    private WifiManager.WifiLock mWifiLock;
-    private WifiManager.MulticastLock mMulticastLock;
-
-    private final MediaPlayer mMediaPlayer = new MediaPlayer();//音乐播放器
     private final CustomHandler mCustomHandler = new CustomHandler(MainActivity.this);//自定义Handler
 
     @Override
@@ -97,6 +90,8 @@ public class MainActivity extends AppCompatActivity {
 
         //初始化成员变量
         initMemberVar();
+        initWifiLockAndMulticastLockInOnCreate();//初始化 Wifi锁 和 多播锁
+        initDataTableReceiverResourceInOnCreate();//初始化 数据表接收器广播 资源
 
         MainActivityPermissionsDispatcher.requestSDCardPermissionAndLaunchAppWithPermissionCheck(MainActivity.this);//用"权限分发器"检查程序是否能读写SD卡然后决定是否开启程序
     }
@@ -121,17 +116,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         //注销工作
         unregisterForContextMenu(mVMenu);
-        AppConfig.getLocalBroadcastManager().unregisterReceiver(mDataTableReceiver);
+        releaseWifiLockAndMulticastLockInOnDestroy();
+        releaseMusicPlayerResourceInOnDestroy();
+        releaseDataTableResourceInOnDestroy();
         mCustomHandler.removeCallbacksAndMessages(null);
-
-        //释放WifiLock和MulticastLock
-        if ((mWifiLock != null) && mWifiLock.isHeld()) mWifiLock.release();
-        if ((mMulticastLock != null) && mMulticastLock.isHeld()) mMulticastLock.release();
-
-        //释放 音乐播放器
-        mMediaPlayer.stop();
-        mMediaPlayer.release();
-
         if (mVvVideo != null) mVvVideo.suspend();//暂停视频
         super.onDestroy();
     }
@@ -215,21 +203,6 @@ public class MainActivity extends AppCompatActivity {
         //FIXME UI
         mMzbvLanternSlideView.setDelayedTime(8000);
         mTvvmTxt.setFlipInterval(8000);
-        //FIXME 三、广播
-        mDataTableReceiver = new DataTableReceiver();
-        IntentFilter lIntentFilter = new IntentFilter();
-        lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);//收到配置表
-        lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);//收到元素表
-        AppConfig.getLocalBroadcastManager().registerReceiver(mDataTableReceiver, lIntentFilter);
-
-        //TODO 五、创建 Wifi锁 和 多播锁
-        WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
-        if (manager != null) {
-            mWifiLock = manager.createWifiLock("Wifi_Lock");
-            mMulticastLock = manager.createMulticastLock("Multicast_Lock");
-            mWifiLock.acquire();//获得WifiLock和MulticastLock
-            mMulticastLock.acquire();
-        }
     }
 
     /**
@@ -332,6 +305,63 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------FIXME WiFi锁 和 多播锁---------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓---------------------------------------------------------------------------------
+    private WifiManager.WifiLock mWifiLock;
+    private WifiManager.MulticastLock mMulticastLock;
+
+    /**
+     * 初始化 WiFi锁 和 多播锁
+     */
+    private void initWifiLockAndMulticastLockInOnCreate() {
+        WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
+        if (manager != null) {
+            mWifiLock = manager.createWifiLock("Wifi_Lock");
+            mMulticastLock = manager.createMulticastLock("Multicast_Lock");
+            mWifiLock.acquire();//获得WifiLock和MulticastLock
+            mMulticastLock.acquire();
+        }
+    }
+
+    private void releaseWifiLockAndMulticastLockInOnDestroy() {
+        if ((mWifiLock != null) && mWifiLock.isHeld()) mWifiLock.release();
+        if ((mMulticastLock != null) && mMulticastLock.isHeld()) mMulticastLock.release();
+    }
+
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------FIXME MediaPlayer 音乐播放器----------------------------------------------------------------------------
+    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------
+    private final MediaPlayer mMediaPlayer = new MediaPlayer();//音乐播放器
+
+    private void releaseMusicPlayerResourceInOnDestroy() {
+        mMediaPlayer.stop();
+        mMediaPlayer.release();
+    }
+
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------FIXME 数据表广播接收器----------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------------
+    private DataTableReceiver mDataTableReceiver;//FIXME 数据表接收器广播
+
+    /**
+     * 初始化 数据表接收器广播 资源
+     */
+    private void initDataTableReceiverResourceInOnCreate() {
+        mDataTableReceiver = new DataTableReceiver();
+        IntentFilter lIntentFilter = new IntentFilter();
+        lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);//收到配置表
+        lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);//收到元素表
+        AppConfig.getLocalBroadcastManager().registerReceiver(mDataTableReceiver, lIntentFilter);
+    }
+
+    /**
+     * 释放 数据表接收器广播 资源
+     */
+    private void releaseDataTableResourceInOnDestroy() {
+        AppConfig.getLocalBroadcastManager().unregisterReceiver(mDataTableReceiver);
+    }
+
     /**
      * FIXME 数据表接收器
      */
@@ -341,6 +371,8 @@ public class MainActivity extends AppCompatActivity {
         private final List<String> mFilePathList = new ArrayList<>(); //"文件路径"列表
         private final List<String> mImagePathList = new ArrayList<>();//"图片路径"列表
         private final List<String> mTxtPathList = new ArrayList<>();  //"文本路径"列表
+        private final List<String> mMusicPathList = new ArrayList<>();//"音乐路径"列表
+        private int mNextMusicIndex;//下一首音乐路径
         private final MZHolderCreator mMZLanternSlideHolderCreator = MZBVLanternSlideViewHolder::new;
 
         @Override
@@ -361,6 +393,8 @@ public class MainActivity extends AppCompatActivity {
 
                         //③释放音乐资源
                         mMediaPlayer.reset();
+                        mNextMusicIndex = 0;
+                        mMusicPathList.clear();
 
                         //④释放视频资源
 
@@ -398,11 +432,24 @@ public class MainActivity extends AppCompatActivity {
                             mTvvmTxt.setViews(lViewList);
                             RxToast.info("收到    文字");
                         } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                          //③播放音乐
+                            mMusicPathList.add(mNextMusicIndex, mFilePath);//新的音乐文件始终要添加进来
+                            mMediaPlayer.reset();
+                            mCustomHandler.removeCallbacksAndMessages(null);
                             mCustomHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
-                                    initMediaPlayerAndPlayMusic(mFilePath);
-                                    mCustomHandler.postDelayed(this, 10 * 1000);
+                                    try {
+                                        if (!mMediaPlayer.isPlaying()) {
+                                            mMediaPlayer.reset();
+                                            mMediaPlayer.setDataSource(mMusicPathList.get(mNextMusicIndex % mMusicPathList.size()));
+                                            mNextMusicIndex = ++mNextMusicIndex % mMusicPathList.size();
+                                            mMediaPlayer.prepare();
+                                            mMediaPlayer.start();
+                                        }
+                                    } catch (Exception e) {
+                                        Logger.t(TAG).e(e, "initMediaPlayerAndPlayMusic: ");
+                                    }
+                                    mCustomHandler.postDelayed(this, 30 * 1000);
                                 }
                             });
                             RxToast.info("收到    音频");
@@ -426,7 +473,7 @@ public class MainActivity extends AppCompatActivity {
             StringBuilder lStringBuilder = new StringBuilder("        ");
             BufferedReader lBufferedReader = null;
             try {
-                lBufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(txtFilePath)));
+                lBufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(txtFilePath), AppConfig.UTF_8_CHAR_SET));
                 String lLineTxt;
                 while ((lLineTxt = lBufferedReader.readLine()) != null) {
                     lStringBuilder.append(lLineTxt);
@@ -444,43 +491,30 @@ public class MainActivity extends AppCompatActivity {
         }
 
         /**
-         * 初始化MediaPlayer 并且 播放音乐
+         * 根据文件路径 判断文件是否存在
          *
-         * @param musicFilePath 音乐文件路径
+         * @param filePath 文件路径
+         * @return 文件存在与否
          */
-        private void initMediaPlayerAndPlayMusic(String musicFilePath) {
-            if (mMediaPlayer.isPlaying()) return;
-            try {
-                mMediaPlayer.reset();
-                mMediaPlayer.setDataSource(musicFilePath);
-                mMediaPlayer.prepare();
-                mMediaPlayer.start();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
         private boolean isFileExists(String filePath) {
             File lFile = new File(filePath);
             return lFile.exists();
         }
-    }
 
-    private static final class MZBVLanternSlideViewHolder implements MZViewHolder<String> {
-        private ImageView mIvLanternSlideItem;
+        private final class MZBVLanternSlideViewHolder implements MZViewHolder<String> {
+            private ImageView mIvLanternSlideItem;
 
-        @Override//返回页面布局
-        public View createView(Context context) {
-            if (mIvLanternSlideItem == null) {
+            @Override//FIXME 返回页面布局
+            public View createView(Context context) {
                 mIvLanternSlideItem = new ImageView(CustomApplication.getContext());
                 mIvLanternSlideItem.setScaleType(ImageView.ScaleType.FIT_XY);
+                return mIvLanternSlideItem;
             }
-            return mIvLanternSlideItem;
-        }
 
-        @Override//绑定数据
-        public void onBind(Context context, int position, String imagePath) {
-            Glide.with(context).load(imagePath).diskCacheStrategy(DiskCacheStrategy.RESULT).skipMemoryCache(true).into(mIvLanternSlideItem);
+            @Override//FIXME 绑定数据
+            public void onBind(Context context, int position, String imagePath) {
+                Glide.with(context).load(imagePath).diskCacheStrategy(DiskCacheStrategy.RESULT).placeholder(R.drawable.bg_main).skipMemoryCache(true).into(mIvLanternSlideItem);
+            }
         }
     }
 }

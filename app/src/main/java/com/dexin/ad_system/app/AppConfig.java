@@ -21,6 +21,7 @@ import java.util.Objects;
  */
 public final class AppConfig {
     private static final String TAG = "TAG_AppConfig";
+    public static final String UTF_8_CHAR_SET = "UTF-8";
     public static final int PORT = 8080;//服务器端口
     public static final int ARRAY_BLOCKING_QUEUE_CAPACITY = 20 * 1000;//阻塞队列容量
     // 21 + 188 * 6 + 311 = 1460

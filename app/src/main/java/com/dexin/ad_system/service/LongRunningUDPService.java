@@ -82,13 +82,13 @@ public final class LongRunningUDPService extends Service {
             }
         }, 5000);
 
-        lHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                AppConfig.getLocalBroadcastManager().sendBroadcast(S_CONFIG_TABLE_INTENT);//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
-                lHandler.postDelayed(this, 120 * 1000);
-            }
-        }, 120 * 1000);
+//        lHandler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                AppConfig.getLocalBroadcastManager().sendBroadcast(S_CONFIG_TABLE_INTENT);//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
+//                lHandler.postDelayed(this, 120 * 1000);
+//            }
+//        }, 120 * 1000);
     }
 
     @Override
