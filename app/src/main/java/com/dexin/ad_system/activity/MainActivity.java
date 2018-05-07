@@ -69,6 +69,7 @@ public class MainActivity extends BaseActivity {
 
         initLanternSlideResourceInOnCreate();
         initMarqueeTextViewInOnCreate();
+        initMediaPlayerInOnCreate();
         initVideoResourceInOnCreate();
         initDataTableReceiverResourceInOnCreate();
 
@@ -94,6 +95,7 @@ public class MainActivity extends BaseActivity {
     @Override
     protected void onDestroy() {
         unregisterForContextMenu(mVMenu);
+        releaseLanternSlideResourceInOnDestroy();
         releaseMarqueeTextViewResourceInOnDestroy();
         releaseMusicPlayerResourceInOnDestroy();
         releaseDataTableResourceInOnDestroy();
@@ -246,6 +248,10 @@ public class MainActivity extends BaseActivity {
         mMzbvLanternSlideView.pause();
     }
 
+    private void releaseLanternSlideResourceInOnDestroy() {
+        mMzbvLanternSlideView.removeAllViews();
+    }
+
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME MarqueeTextView---------------------------------------------------------------------------------
     //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓---------------------------------------------------------------------------------
@@ -274,6 +280,11 @@ public class MainActivity extends BaseActivity {
     private static final Handler mMusicPlayerHandler = new Handler();
     private final MediaPlayer mMediaPlayer = new MediaPlayer();//音乐播放器
 
+    private void initMediaPlayerInOnCreate() {
+        mMediaPlayer.setOnPreparedListener(mediaPlayer -> RxToast.info("开始播放 音频!"));
+        mMediaPlayer.setOnCompletionListener(mediaPlayer -> RxToast.info("本段 音频 播放完毕!"));
+    }
+
     private void releaseMusicPlayerResourceInOnDestroy() {
         mMusicPlayerHandler.removeCallbacksAndMessages(null);
         mMediaPlayer.stop();
@@ -288,7 +299,11 @@ public class MainActivity extends BaseActivity {
     private static final Handler mVideoPlayerHandler = new Handler();
 
     private void initVideoResourceInOnCreate() {
-        mVvVideo.setOnCompletionListener(mediaPlayer -> mVvVideo.setVisibility(View.GONE));
+        mVvVideo.setOnPreparedListener(mediaPlayer -> RxToast.info("开始播放 视频!"));
+        mVvVideo.setOnCompletionListener(mediaPlayer -> {
+            mVvVideo.setVisibility(View.GONE);
+            RxToast.info("本段 视频 播放完毕!");
+        });
     }
 
     private void releaseVideoResourceInOnPause() {
@@ -339,34 +354,35 @@ public class MainActivity extends BaseActivity {
             if (AppConfig.isComponentAlive(MainActivity.this) && (intent != null)) {
                 switch (Objects.requireNonNull(intent.getAction())) {
                     case AppConfig.ACTION_RECEIVE_CONFIG_TABLE://1.收到"新版本的配置表":
-                        RxToast.info("接收新数据中,清除原数据!");
+                        RxToast.warning("接收新数据中...,清除原数据!!!");
                         //①释放幻灯资源
+                        mMzbvLanternSlideView.pause();
+                        mMzbvLanternSlideView.removeAllViews();
                         mMzbvLanternSlideView.setVisibility(View.GONE);
-                        mImagePathList.clear();
 
                         //②释放文本资源
                         mTvvmTxt.stopFlipping();
-                        mTvvmTxt.setVisibility(View.GONE);
                         mTvvmTxt.removeAllViews();
-                        mTxtPathList.clear();
+                        mTvvmTxt.setVisibility(View.GONE);
 
                         //③释放音乐资源
                         mMediaPlayer.reset();
                         mNextMusicIndex = 0;
-                        mMusicPathList.clear();
 
                         //④释放视频资源
                         mVvVideo.suspend();
                         mVvVideo.setVisibility(View.GONE);
                         mNextVideoIndex = 0;
-                        mVideoPathList.clear();
 
-                        //⑤释放公共资源
+                        //⑤清空全部集合
+                        mImagePathList.clear();
+                        mTxtPathList.clear();
+                        mMusicPathList.clear();
+                        mVideoPathList.clear();
                         mFilePathList.clear();
                         break;
                     case AppConfig.ACTION_RECEIVE_ELEMENT_TABLE://2.收到"新版本的元素表":
-                        mFilePath = MessageFormat.format("{0}/{1}", AppConfig.MEDIA_FILE_FOLDER, intent.getStringExtra(AppConfig.KEY_FILE_NAME));
-                        if (!isFileExists(mFilePath)) break;
+                        if (!new File(mFilePath = MessageFormat.format("{0}/{1}", AppConfig.MEDIA_FILE_FOLDER, intent.getStringExtra(AppConfig.KEY_FILE_NAME))).exists()) break;
                         if (!mFilePathList.contains(mFilePath)) {
                             mFilePathList.add(mFilePath);
                         } else {
@@ -401,7 +417,7 @@ public class MainActivity extends BaseActivity {
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
                                 mMediaPlayer.reset();
                                 mVvVideo.suspend();
-                                mVvVideo.setVisibility(View.GONE);
+                                if (mVvVideo.getVisibility() == View.VISIBLE) mVvVideo.setVisibility(View.GONE);
                             }
                             mMusicPlayerHandler.removeCallbacksAndMessages(null);
                             mMusicPlayerHandler.post(new Runnable() {
@@ -421,7 +437,8 @@ public class MainActivity extends BaseActivity {
                                 }
                             });
                             RxToast.info("收到    新音频");
-                        } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb") || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {//④播放视频
+                        } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb")
+                                || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {                                                          //④播放视频
                             mVideoPathList.add(mNextVideoIndex, mFilePath);//加入 新的视频文件 到当前正在播放的视频位置
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
                                 mMediaPlayer.reset();
@@ -477,17 +494,6 @@ public class MainActivity extends BaseActivity {
                 }
             }
             return lStringBuilder.toString();
-        }
-
-        /**
-         * 根据文件路径 判断文件是否存在
-         *
-         * @param filePath 文件路径
-         * @return 文件存在与否
-         */
-        private boolean isFileExists(String filePath) {
-            File lFile = new File(filePath);
-            return lFile.exists();
         }
 
         private final class MZBVLanternSlideViewHolder implements MZViewHolder<String> {
