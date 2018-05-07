@@ -7,13 +7,10 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Color;
 import android.media.MediaPlayer;
-import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.text.method.NumberKeyListener;
@@ -36,7 +33,6 @@ import com.dexin.ad_system.app.AppConfig;
 import com.dexin.ad_system.app.CustomApplication;
 import com.dexin.ad_system.service.LongRunningUDPService;
 import com.orhanobut.logger.Logger;
-import com.vondear.rxtools.RxBarTool;
 import com.vondear.rxtools.view.RxTextViewVerticalMore;
 import com.vondear.rxtools.view.RxToast;
 import com.zhouwei.mzbanner.MZBannerView;
@@ -47,13 +43,10 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
-import java.lang.ref.WeakReference;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Timer;
-import java.util.TimerTask;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -65,33 +58,19 @@ import permissions.dispatcher.PermissionRequest;
 import permissions.dispatcher.RuntimePermissions;
 
 @RuntimePermissions
-public class MainActivity extends AppCompatActivity {
-    private static final int FLAG_HOMEKEY_DISPATCHED = 0x80000000;//HOME键分发标志
-
-    @BindView(R.id.mzbv_lantern_slide_view)
-    MZBannerView<String> mMzbvLanternSlideView;
-    @BindView(R.id.tvvm_txt)
-    RxTextViewVerticalMore mTvvmTxt;
-    @BindView(R.id.vv_video)
-    VideoView mVvVideo;
-    @BindView(R.id.v_menu)
-    View mVMenu;
-
-    private final CustomHandler mCustomHandler = new CustomHandler(MainActivity.this);//自定义Handler
+public class MainActivity extends BaseActivity {
+    private static final String TAG = "TAG_MainActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().setBackgroundDrawable(null);
-        getWindow().setFlags(FLAG_HOMEKEY_DISPATCHED, FLAG_HOMEKEY_DISPATCHED);    //设置为主屏幕的关键代码
-        RxBarTool.hideStatusBar(this);//隐藏掉状态栏
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
-        //初始化成员变量
-        initMemberVar();
-        initWifiLockAndMulticastLockInOnCreate();//初始化 Wifi锁 和 多播锁
-        initDataTableReceiverResourceInOnCreate();//初始化 数据表接收器广播 资源
+        initLanternSlideResourceInOnCreate();
+        initMarqueeTextViewInOnCreate();
+        initVideoResourceInOnCreate();
+        initDataTableReceiverResourceInOnCreate();
 
         MainActivityPermissionsDispatcher.requestSDCardPermissionAndLaunchAppWithPermissionCheck(MainActivity.this);//用"权限分发器"检查程序是否能读写SD卡然后决定是否开启程序
     }
@@ -99,28 +78,25 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        mMzbvLanternSlideView.start();
+        startLanternSlideInOnResume();
+        startMarqueeTextViewInOnResume();
         registerForContextMenu(mVMenu);
     }
 
     @Override
     protected void onPause() {
-        mMzbvLanternSlideView.pause();
-        mTvvmTxt.stopFlipping();
-        mTvvmTxt.removeAllViews();
-        mVvVideo.suspend();
+        pauseLanternSlideInOnPause();
+        stopMarqueeTextViewInOnPause();
+        releaseVideoResourceInOnPause();
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
-        //注销工作
         unregisterForContextMenu(mVMenu);
-        releaseWifiLockAndMulticastLockInOnDestroy();
+        releaseMarqueeTextViewResourceInOnDestroy();
         releaseMusicPlayerResourceInOnDestroy();
         releaseDataTableResourceInOnDestroy();
-        mCustomHandler.removeCallbacksAndMessages(null);
-        if (mVvVideo != null) mVvVideo.suspend();//暂停视频
         super.onDestroy();
     }
 
@@ -164,27 +140,6 @@ public class MainActivity extends AppCompatActivity {
         MainActivityPermissionsDispatcher.onRequestPermissionsResult(this, requestCode, grantResults);
     }
 
-    /**
-     * 自定义Handler,防止延时消息导致内存泄漏
-     */
-    private static final class CustomHandler extends Handler {
-        private final WeakReference<MainActivity> mCurActivityWeakReference;
-
-        CustomHandler(MainActivity curActivity) {
-            mCurActivityWeakReference = new WeakReference<>(curActivity);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            MainActivity curActivity = mCurActivityWeakReference.get();
-            if (curActivity != null) {// + 判断curActivity的成员变量是否为 null
-                switch (msg.what) {//TODO 执行消息业务逻辑
-                    default:
-                }
-            }
-        }
-    }
-
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         switch (keyCode) {//屏蔽掉 Back键 和 Home键
@@ -194,15 +149,6 @@ public class MainActivity extends AppCompatActivity {
                 return true;
         }
         return super.onKeyDown(keyCode, event);
-    }
-
-    /**
-     * 初始化成员变量
-     */
-    private void initMemberVar() {
-        //FIXME UI
-        mMzbvLanternSlideView.setDelayedTime(8000);
-        mTvvmTxt.setFlipInterval(8000);
     }
 
     /**
@@ -279,64 +225,75 @@ public class MainActivity extends AppCompatActivity {
         return super.onContextItemSelected(item);
     }
 
-    /**
-     * 播放视频
-     *
-     * @param filePath 视频文件路径
-     */
-    private void playVideo(String filePath) {
-        //此时没有在播放视频
-        if (!mVvVideo.isPlaying()) {
-            mVvVideo.setVisibility(View.VISIBLE);
-            mVvVideo.setVideoPath(filePath);
-            mVvVideo.start();
-            new Timer().schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    mCustomHandler.post(() -> {
-                        if (!mVvVideo.isPlaying()) {             //没有正在播放视频，就将vvVideoView销毁
-                            mVvVideo.setVisibility(View.GONE);
-                        }
-                    });
-                }
-            }, mVvVideo.getDuration() + 1500, 2000);         //周期性（2秒）地检查是否还在播放视频
-        } else {
-            //此时正在播放视频,当前视频播放完毕后再播放新的视频
-        }
+    @BindView(R.id.v_menu)
+    View mVMenu;
+
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------FIXME 幻灯片-------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓-------------------------------------------------------------------------------------------
+    @BindView(R.id.mzbv_lantern_slide_view)
+    MZBannerView<String> mMzbvLanternSlideView;
+
+    private void initLanternSlideResourceInOnCreate() {
+        mMzbvLanternSlideView.setDelayedTime(8000);
+    }
+
+    private void startLanternSlideInOnResume() {
+        mMzbvLanternSlideView.start();
+    }
+
+    private void pauseLanternSlideInOnPause() {
+        mMzbvLanternSlideView.pause();
     }
 
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    //------------------------------------------------------------------------------FIXME WiFi锁 和 多播锁---------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------FIXME MarqueeTextView---------------------------------------------------------------------------------
     //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓---------------------------------------------------------------------------------
-    private WifiManager.WifiLock mWifiLock;
-    private WifiManager.MulticastLock mMulticastLock;
+    @BindView(R.id.tvvm_txt)
+    RxTextViewVerticalMore mTvvmTxt;
 
-    /**
-     * 初始化 WiFi锁 和 多播锁
-     */
-    private void initWifiLockAndMulticastLockInOnCreate() {
-        WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
-        if (manager != null) {
-            mWifiLock = manager.createWifiLock("Wifi_Lock");
-            mMulticastLock = manager.createMulticastLock("Multicast_Lock");
-            mWifiLock.acquire();//获得WifiLock和MulticastLock
-            mMulticastLock.acquire();
-        }
+    private void initMarqueeTextViewInOnCreate() {
+        mTvvmTxt.setFlipInterval(8000);
     }
 
-    private void releaseWifiLockAndMulticastLockInOnDestroy() {
-        if ((mWifiLock != null) && mWifiLock.isHeld()) mWifiLock.release();
-        if ((mMulticastLock != null) && mMulticastLock.isHeld()) mMulticastLock.release();
+    private void startMarqueeTextViewInOnResume() {
+        if (!mTvvmTxt.isFlipping()) mTvvmTxt.startFlipping();
+    }
+
+    private void stopMarqueeTextViewInOnPause() {
+        if (mTvvmTxt.isFlipping()) mTvvmTxt.stopFlipping();
+    }
+
+    private void releaseMarqueeTextViewResourceInOnDestroy() {
+        mTvvmTxt.removeAllViews();
     }
 
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME MediaPlayer 音乐播放器----------------------------------------------------------------------------
     //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------
+    private static final Handler mMusicPlayerHandler = new Handler();
     private final MediaPlayer mMediaPlayer = new MediaPlayer();//音乐播放器
 
     private void releaseMusicPlayerResourceInOnDestroy() {
+        mMusicPlayerHandler.removeCallbacksAndMessages(null);
         mMediaPlayer.stop();
         mMediaPlayer.release();
+    }
+
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------FIXME VideoView 视频播放器-----------------------------------------------------------------------------
+    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓---------------------------------------------------------------------------------
+    @BindView(R.id.vv_video)
+    VideoView mVvVideo;
+    private static final Handler mVideoPlayerHandler = new Handler();
+
+    private void initVideoResourceInOnCreate() {
+        mVvVideo.setOnCompletionListener(mediaPlayer -> mVvVideo.setVisibility(View.GONE));
+    }
+
+    private void releaseVideoResourceInOnPause() {
+        mVideoPlayerHandler.removeCallbacksAndMessages(null);
+        mVvVideo.suspend();
     }
 
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -372,7 +329,9 @@ public class MainActivity extends AppCompatActivity {
         private final List<String> mImagePathList = new ArrayList<>();//"图片路径"列表
         private final List<String> mTxtPathList = new ArrayList<>();  //"文本路径"列表
         private final List<String> mMusicPathList = new ArrayList<>();//"音乐路径"列表
-        private int mNextMusicIndex;//下一首音乐路径
+        private int mNextMusicIndex;//下一段音频路径
+        private final List<String> mVideoPathList = new ArrayList<>();//"视频路径"列表
+        private int mNextVideoIndex;//下一段视频路径
         private final MZHolderCreator mMZLanternSlideHolderCreator = MZBVLanternSlideViewHolder::new;
 
         @Override
@@ -381,13 +340,13 @@ public class MainActivity extends AppCompatActivity {
                 switch (Objects.requireNonNull(intent.getAction())) {
                     case AppConfig.ACTION_RECEIVE_CONFIG_TABLE://1.收到"新版本的配置表":
                         RxToast.info("接收新数据中,清除原数据!");
-                        //①释放图片资源
-                        mMzbvLanternSlideView.pause();
+                        //①释放幻灯资源
                         mMzbvLanternSlideView.setVisibility(View.GONE);
                         mImagePathList.clear();
 
                         //②释放文本资源
                         mTvvmTxt.stopFlipping();
+                        mTvvmTxt.setVisibility(View.GONE);
                         mTvvmTxt.removeAllViews();
                         mTxtPathList.clear();
 
@@ -397,6 +356,10 @@ public class MainActivity extends AppCompatActivity {
                         mMusicPathList.clear();
 
                         //④释放视频资源
+                        mVvVideo.suspend();
+                        mVvVideo.setVisibility(View.GONE);
+                        mNextVideoIndex = 0;
+                        mVideoPathList.clear();
 
                         //⑤释放公共资源
                         mFilePathList.clear();
@@ -411,15 +374,16 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         if (mFilePath.endsWith(".png") || mFilePath.endsWith(".bmp") || mFilePath.endsWith(".jpg") || mFilePath.endsWith(".gif")) {     //①播放幻灯片
-                            mMzbvLanternSlideView.pause();//始终先释放资源
                             if (mMzbvLanternSlideView.getVisibility() == View.GONE) mMzbvLanternSlideView.setVisibility(View.VISIBLE);
                             mImagePathList.add(0, mFilePath);
+                            mMzbvLanternSlideView.pause();
                             mMzbvLanternSlideView.setPages(mImagePathList, mMZLanternSlideHolderCreator);
-                            if (mImagePathList.size() > 1) mMzbvLanternSlideView.start();//再根据情况开启
-                            RxToast.info("收到    图片");
+                            mMzbvLanternSlideView.start();
+                            RxToast.info("收到    新图片");
                         } else if (mFilePath.endsWith(".txt")) {                                                                                        //②播放文字
                             mTvvmTxt.stopFlipping();//始终先释放资源
                             mTvvmTxt.removeAllViews();
+                            if (mTvvmTxt.getVisibility() == View.GONE) mTvvmTxt.setVisibility(View.VISIBLE);
                             mTxtPathList.add(0, mFilePath);
                             List<View> lViewList = new ArrayList<>();
                             for (String txtPath : mTxtPathList) {
@@ -430,31 +394,56 @@ public class MainActivity extends AppCompatActivity {
                                 lViewList.add(lTvFlipping);
                             }
                             mTvvmTxt.setViews(lViewList);
-                            RxToast.info("收到    文字");
-                        } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                          //③播放音乐
-                            mMusicPathList.add(mNextMusicIndex, mFilePath);//新的音乐文件始终要添加进来
-                            mMediaPlayer.reset();
-                            mCustomHandler.removeCallbacksAndMessages(null);
-                            mCustomHandler.post(new Runnable() {
+                            if (lViewList.size() <= 1) mTvvmTxt.stopFlipping();
+                            RxToast.info("收到    新文本");
+                        } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                          //③播放音频
+                            mMusicPathList.add(mNextMusicIndex, mFilePath);//加入 新的音频文件 到当前正在播放的音频位置
+                            {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
+                                mMediaPlayer.reset();
+                                mVvVideo.suspend();
+                                mVvVideo.setVisibility(View.GONE);
+                            }
+                            mMusicPlayerHandler.removeCallbacksAndMessages(null);
+                            mMusicPlayerHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
+                                    mMusicPlayerHandler.postDelayed(this, 30 * 1000);//放在首行,始终向后检查
                                     try {
-                                        if (!mMediaPlayer.isPlaying()) {
-                                            mMediaPlayer.reset();
-                                            mMediaPlayer.setDataSource(mMusicPathList.get(mNextMusicIndex % mMusicPathList.size()));
-                                            mNextMusicIndex = ++mNextMusicIndex % mMusicPathList.size();
-                                            mMediaPlayer.prepare();
-                                            mMediaPlayer.start();
-                                        }
+                                        if (mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//音频 或 视频 正在播放,则终止本次逻辑
+                                        mMediaPlayer.reset();
+                                        mMediaPlayer.setDataSource(mMusicPathList.get(mNextMusicIndex++ % mMusicPathList.size()));
+                                        mNextMusicIndex = mNextMusicIndex % mMusicPathList.size();
+                                        mMediaPlayer.prepare();
+                                        mMediaPlayer.start();
                                     } catch (Exception e) {
-                                        Logger.t(TAG).e(e, "initMediaPlayerAndPlayMusic: ");
+                                        Logger.t(TAG).e(e, "run: ");
                                     }
-                                    mCustomHandler.postDelayed(this, 30 * 1000);
                                 }
                             });
-                            RxToast.info("收到    音频");
-                        } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb") || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {    //④显示视频
-                            RxToast.info("收到    视频");
+                            RxToast.info("收到    新音频");
+                        } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb") || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {//④播放视频
+                            mVideoPathList.add(mNextVideoIndex, mFilePath);//加入 新的视频文件 到当前正在播放的视频位置
+                            {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
+                                mMediaPlayer.reset();
+                                mVvVideo.suspend();
+                            }
+                            mVideoPlayerHandler.removeCallbacksAndMessages(null);
+                            mVideoPlayerHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    mVideoPlayerHandler.postDelayed(this, 30 * 1000);
+                                    try {
+                                        if (mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//音频 或 视频 正在播放,则终止本次逻辑
+                                        if (mVvVideo.getVisibility() == View.GONE) mVvVideo.setVisibility(View.VISIBLE);
+                                        mVvVideo.setVideoPath(mVideoPathList.get(mNextVideoIndex++ % mVideoPathList.size()));
+                                        mNextVideoIndex = mNextVideoIndex % mVideoPathList.size();
+                                        mVvVideo.start();
+                                    } catch (Exception e) {
+                                        Logger.t(TAG).e(e, "run: ");
+                                    }
+                                }
+                            });
+                            RxToast.info("收到    新视频");
                         }
                         break;
                     default:
@@ -513,7 +502,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override//FIXME 绑定数据
             public void onBind(Context context, int position, String imagePath) {
-                Glide.with(context).load(imagePath).diskCacheStrategy(DiskCacheStrategy.RESULT).placeholder(R.drawable.bg_main).skipMemoryCache(true).into(mIvLanternSlideItem);
+                Glide.with(context).load(imagePath).diskCacheStrategy(DiskCacheStrategy.RESULT).crossFade().skipMemoryCache(true).into(mIvLanternSlideItem);
             }
         }
     }

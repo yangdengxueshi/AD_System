@@ -1,8 +1,10 @@
 package com.dexin.ad_system.service;
 
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.BitmapFactory;
+import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
@@ -57,6 +59,8 @@ public final class LongRunningUDPService extends Service {
         startForeground(1, new NotificationCompat.Builder(CustomApplication.getContext(), "ForegroundService")
                 .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher)).setSmallIcon(R.mipmap.ic_launcher).setContentTitle("CDR广告系统").setContentText("请求网络数据的前台服务.")
                 .setWhen(System.currentTimeMillis()).build());
+        initWifiLockAndMulticastLockInOnCreate();//初始化 Wifi锁 和 多播锁
+
         if (mUDPPackProducerThread == null) mUDPPackProducerThread = new UDPPackProducerThread();
         if (mPayloadConsumerThread == null) mPayloadConsumerThread = new PayloadConsumerThread();
         if (mCusDataConsumerThread == null) mCusDataConsumerThread = new CusDataConsumerThread();
@@ -64,21 +68,24 @@ public final class LongRunningUDPService extends Service {
         Intent S_CONFIG_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);
         Intent S_ELEMENT_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);
         List<String> lFileNameList = new ArrayList<>();
-//        lFileNameList.add("111.txt");
-//        lFileNameList.add("222.txt");
-//        lFileNameList.add("333.txt");
-//        lFileNameList.add("111.jpg");
-//        lFileNameList.add("222.ipg");
-//        lFileNameList.add("333.jpg");
+        lFileNameList.add("111.txt");
+        lFileNameList.add("222.txt");
+        lFileNameList.add("333.txt");
+        lFileNameList.add("111.jpg");
+        lFileNameList.add("222.ipg");
+        lFileNameList.add("333.jpg");
         lFileNameList.add("111.mp3");
         lFileNameList.add("222.mp3");
         lFileNameList.add("333.mp3");
+        lFileNameList.add("111.mp4");
+        lFileNameList.add("222.mp4");
+        lFileNameList.add("333.mp4");
         Handler lHandler = new Handler();
         lHandler.postDelayed(new Runnable() {
             @Override
             public void run() {
                 AppConfig.getLocalBroadcastManager().sendBroadcast(S_ELEMENT_TABLE_INTENT.putExtra(AppConfig.KEY_FILE_NAME, lFileNameList.get((int) (Math.random() * lFileNameList.size()))));//1.应该先发送广播"请求清空分类文件集合"
-                lHandler.postDelayed(this, 5000);
+                lHandler.postDelayed(this, 10 * 1000);
             }
         }, 5000);
 
@@ -115,8 +122,37 @@ public final class LongRunningUDPService extends Service {
             mCusDataConsumerThread.stopCusDataConsumerThreadSafely();
             mCusDataConsumerThread = null;
         }
+        releaseWifiLockAndMulticastLockInOnDestroy();//释放 Wifi锁 和 多播锁
         super.onDestroy();
     }
+
+
+    /**
+     * -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------FIXME WiFi锁 和 多播锁--------------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓------------------------------------------------------------------------------------------
+     */
+    private WifiManager.WifiLock mWifiLock;
+    private WifiManager.MulticastLock mMulticastLock;
+
+    /**
+     * 初始化 WiFi锁 和 多播锁
+     */
+    private void initWifiLockAndMulticastLockInOnCreate() {
+        WifiManager manager = (WifiManager) (getApplicationContext().getSystemService(Context.WIFI_SERVICE));
+        if (manager != null) {
+            mWifiLock = manager.createWifiLock("Wifi_Lock");
+            mMulticastLock = manager.createMulticastLock("Multicast_Lock");
+            mWifiLock.acquire();//获得WifiLock和MulticastLock
+            mMulticastLock.acquire();
+        }
+    }
+
+    private void releaseWifiLockAndMulticastLockInOnDestroy() {
+        if ((mWifiLock != null) && mWifiLock.isHeld()) mWifiLock.release();
+        if ((mMulticastLock != null) && mMulticastLock.isHeld()) mMulticastLock.release();
+    }
+
 
     /**
      * -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
