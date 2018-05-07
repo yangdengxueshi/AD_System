@@ -34,6 +34,16 @@
         android:layout_gravity="center"
         android:visibility="gone"/>
 
+    <TextClock
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_margin="1dp"
+        android:format12Hour="@string/time_format"
+        android:format24Hour="@string/time_format"
+        android:textColor="@color/white"
+        android:textSize="20sp"/>
+
     <View
         android:id="@+id/v_menu"
         android:layout_width="match_parent"

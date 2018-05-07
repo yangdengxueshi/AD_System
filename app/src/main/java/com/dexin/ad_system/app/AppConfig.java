@@ -22,7 +22,7 @@ import java.util.Objects;
 public final class AppConfig {
     private static final String TAG = "TAG_AppConfig";
     public static final String UTF_8_CHAR_SET = "UTF-8";
-    public static final int PORT = 8080;//服务器端口
+    public static final int DEFAULT_DATA_RECEIVE_PORT = 8080;//默认接收数据端口
     public static final int ARRAY_BLOCKING_QUEUE_CAPACITY = 20 * 1000;//阻塞队列容量
     // 21 + 188 * 6 + 311 = 1460
     public static final int UDP_PACKET_HEADER_SIZE = 21;//UDP包头长度
@@ -44,6 +44,8 @@ public final class AppConfig {
 
     public static final String ACTION_RECEIVE_CONFIG_TABLE = "ACTION_RECEIVE_CONFIG_TABLE";//收到配置表
     public static final String ACTION_RECEIVE_ELEMENT_TABLE = "ACTION_RECEIVE_ELEMENT_TABLE";//收到元素表
+    public static final String KEY_FIRST_LAUNCH = "KEY_FIRST_LAUNCH";
+    public static final String KEY_DATA_RECEIVE_PORT = "KEY_DATA_RECEIVE_PORT";
     public static final String KEY_FILE_NAME = "KEY_FILE_NAME";
 
     private static final class LocalBroadcastManagerHolder {

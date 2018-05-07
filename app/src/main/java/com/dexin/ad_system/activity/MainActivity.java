@@ -1,6 +1,5 @@
 package com.dexin.ad_system.activity;
 
-import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -9,23 +8,19 @@ import android.graphics.Color;
 import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
-import android.text.InputType;
 import android.text.TextUtils;
-import android.text.method.NumberKeyListener;
 import android.view.ContextMenu;
-import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 import android.widget.VideoView;
 
 import com.blankj.utilcode.util.FileUtils;
-import com.blankj.utilcode.util.RegexUtils;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.dexin.ad_system.R;
@@ -50,16 +45,8 @@ import java.util.Objects;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
-import permissions.dispatcher.NeedsPermission;
-import permissions.dispatcher.OnNeverAskAgain;
-import permissions.dispatcher.OnPermissionDenied;
-import permissions.dispatcher.OnShowRationale;
-import permissions.dispatcher.PermissionRequest;
-import permissions.dispatcher.RuntimePermissions;
 
-@RuntimePermissions
 public class MainActivity extends BaseActivity {
-    private static final String TAG = "TAG_MainActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,7 +60,14 @@ public class MainActivity extends BaseActivity {
         initVideoResourceInOnCreate();
         initDataTableReceiverResourceInOnCreate();
 
-        MainActivityPermissionsDispatcher.requestSDCardPermissionAndLaunchAppWithPermissionCheck(MainActivity.this);//用"权限分发器"检查程序是否能读写SD卡然后决定是否开启程序
+        if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_LAUNCH, true)) {
+            configAppParams();
+        } else {
+            FileUtils.createOrExistsDir(AppConfig.MEDIA_FILE_FOLDER);
+            stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
+            startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
+            RxToast.warning("数据接收与解析服务已启动!");
+        }
     }
 
     @Override
@@ -81,7 +75,7 @@ public class MainActivity extends BaseActivity {
         super.onResume();
         startLanternSlideInOnResume();
         startMarqueeTextViewInOnResume();
-        registerForContextMenu(mVMenu);
+        registerForContextMenuInOnResume();
     }
 
     @Override
@@ -94,7 +88,7 @@ public class MainActivity extends BaseActivity {
 
     @Override
     protected void onDestroy() {
-        unregisterForContextMenu(mVMenu);
+        unregisterForContextMenuInOnDestroy();
         releaseLanternSlideResourceInOnDestroy();
         releaseMarqueeTextViewResourceInOnDestroy();
         releaseMusicPlayerResourceInOnDestroy();
@@ -107,128 +101,88 @@ public class MainActivity extends BaseActivity {
         return new Intent(context, MainActivity.class);
     }
 
-    @NeedsPermission({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
-    void requestSDCardPermissionAndLaunchApp() {//在需要获取权限的地方注释
-        if (AppConfig.getSPUtils().getBoolean("isFirstLaunch", true)) {//第一次启动App程序
-            setServerIP_Port();//设置IP地址和端口号后（再开启服务）
-        } else {//直接开启服务
-            FileUtils.createOrExistsDir(AppConfig.MEDIA_FILE_FOLDER);//先创建本程序的媒体文件夹 "/AD_System"
-            //先停止、再启动Service
-            stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-            startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-            RxToast.warning("数据接收与解析服务已启动!");
-        }
-    }
-
-    @OnShowRationale({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
-    void showSDCardPermissionRationale(PermissionRequest request) {//提示用户为何要开启SD卡读写权限
-        new AlertDialog.Builder(MainActivity.this).setMessage("程序媒体文件操作依赖于对SD卡的读写!").setPositiveButton("确定", (dialog, which) -> request.proceed()).show();//再次执行权限请求
-    }
-
-    @OnPermissionDenied({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
-    void onSDCardPermissionDenied() {//用户选择了拒绝SD卡权限时的提示
-        RxToast.warning("拒绝程序访问SD卡,程序将无法正常工作\n请到系统权限管理中重新开启!");
-    }
-
-    @OnNeverAskAgain({Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE})
-    void onNeverAskAgainSDCardPermission() {//用户选择不再询问SD卡权限时的提示
-        new AlertDialog.Builder(MainActivity.this).setMessage("拒绝程序访问SD卡,程序将无法正常工作\n请到系统权限管理中重新开启!").setPositiveButton("确定", (dialog, which) -> {
-        }).show();
-    }
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------FIXME 返回键被点击--------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓--------------------------------------------------------------------------------------
+    private long TIME_BACK_PRESSED;//Back键被按下的时间间隔
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        MainActivityPermissionsDispatcher.onRequestPermissionsResult(this, requestCode, grantResults);
-    }
-
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        switch (keyCode) {//屏蔽掉 Back键 和 Home键
-            case KeyEvent.KEYCODE_BACK:
-                return true;
-            case KeyEvent.KEYCODE_HOME:
-                return true;
-        }
-        return super.onKeyDown(keyCode, event);
-    }
-
-    /**
-     * 设置服务器的“IP”与“端口”
-     */
-    public void setServerIP_Port() {
-        // 装载自定义的xml文件到对话框中
-        View tlConfig = getLayoutInflater().inflate(R.layout.ip_port, null);
-        EditText etIP = tlConfig.findViewById(R.id.et_ip);
-        etIP.setKeyListener(new NumberKeyListener() {
-            @Override
-            public int getInputType() {
-                return InputType.TYPE_CLASS_TEXT;
-            }
-
-            @NonNull
-            @Override
-            protected char[] getAcceptedChars() {
-                return new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.'};
-            }
-        });
-        etIP.setText(AppConfig.getSPUtils().getString("ip", ""));
-
-        EditText etPort = tlConfig.findViewById(R.id.et_port);
-        if (AppConfig.getSPUtils().contains("port")) {     //SP中存有port就将其取出设置给控件，不存有就给控件设置空字符串
-            etPort.setText(String.valueOf(AppConfig.getSPUtils().getInt("port", -1)));
+    public void onBackPressed() {
+        if (TIME_BACK_PRESSED + 4 * 500 > System.currentTimeMillis()) {
+            super.onBackPressed();
+            return;
         } else {
-            etPort.setText("");
+            RxToast.warning("再次点击返回键退出");
         }
-        new AlertDialog.Builder(this).setIcon(R.drawable.icon_settings).setTitle("服务器IP与端口配置").setView(tlConfig)
-                .setNegativeButton("取消", (dialog, which) -> {
-                })
-                .setPositiveButton("确定", (dialog, which) -> {//TODO 此处可执行逻辑处理
-                    String ipStr = etIP.getText().toString();
-                    String portStr = etPort.getText().toString();
-                    if (TextUtils.isEmpty(portStr)) {
-                        RxToast.error("端口号不能为空!");
-                        return;
-                    }
-                    int portValue = Integer.parseInt(portStr);
+        TIME_BACK_PRESSED = System.currentTimeMillis();
+    }
 
-                    //判断IP输入和端口输入的格式是否正确,如果正确，将其写入SP，如果错误，给出提示。
-                    if (RegexUtils.isIP(ipStr) && (0 <= portValue && portValue <= 65535)) {
-                        AppConfig.getSPUtils().put("isFirstLaunch", false);
-                        AppConfig.getSPUtils().put("ip", ipStr);
-                        AppConfig.getSPUtils().put("port", portValue);             //点击了“确定”才认为APP不再是第一次启动了，并且设置了IP和端口号
-                        stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-                        startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-                        RxToast.warning("数据接收与解析服务已启动!");
-                    } else {
-                        Toast.makeText(CustomApplication.getContext(), "您输入的 IP 或 端口 不符合格式要求。\n请长按屏幕重新设置。", Toast.LENGTH_LONG).show();
-                        setServerIP_Port();//TODO 弹出对话框请求重新输入
-                    }
-                })
-                .show();
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------FIXME 上下文菜单---------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓---------------------------------------------------------------------------------------
+    private static final Intent WIFI_SETTINGS_INTENT = new Intent(Settings.ACTION_WIFI_SETTINGS);
+    @BindView(R.id.v_menu)
+    View mVMenu;
+
+    private void registerForContextMenuInOnResume() {
+        registerForContextMenu(mVMenu);
+    }
+
+    private void unregisterForContextMenuInOnDestroy() {
+        unregisterForContextMenu(mVMenu);
     }
 
     @Override
-    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
+    public void onCreateContextMenu(ContextMenu menu, View view, ContextMenu.ContextMenuInfo contextMenuInfo) {
         getMenuInflater().inflate(R.menu.menu_context, menu);
         menu.setHeaderTitle("程序设置");
         menu.setHeaderIcon(R.drawable.icon_settings);
-        super.onCreateContextMenu(menu, v, menuInfo);
+        super.onCreateContextMenu(menu, view, contextMenuInfo);
     }
 
     @Override
     public boolean onContextItemSelected(MenuItem item) {
-        item.setChecked(true);
         switch (item.getItemId()) {
-            case R.id.server_ip_port_set:
-                setServerIP_Port();         //TODO 设置IP地址 和 端口号
+            case R.id.local_wifi_net_set://FIXME 本地Wifi网络设置:
+                startActivity(WIFI_SETTINGS_INTENT);
+                break;
+            case R.id.server_port_set://FIXME 设置"端口号"
+                configAppParams();
                 break;
         }
         return super.onContextItemSelected(item);
     }
 
-    @BindView(R.id.v_menu)
-    View mVMenu;
+    /**
+     * 配置App参数
+     */
+    private void configAppParams() {
+        final int[] lPortValueArr = {AppConfig.getSPUtils().getInt(AppConfig.KEY_DATA_RECEIVE_PORT, AppConfig.DEFAULT_DATA_RECEIVE_PORT)};
+        View lConfigLayout = getLayoutInflater().inflate(R.layout.layout_config, null);
+        EditText lEtPort = lConfigLayout.findViewById(R.id.et_port);
+        lEtPort.setText(String.valueOf(lPortValueArr[0]));
+        lEtPort.setSelection(lEtPort.getText().toString().length());
+        new AlertDialog.Builder(MainActivity.this).setIcon(R.drawable.icon_settings).setTitle(R.string.data_receive_port_config).setView(lConfigLayout)
+                .setPositiveButton("确定", (dialog, which) -> {
+                    String lPortValueEdited = lEtPort.getText().toString();
+                    if (TextUtils.isEmpty(lPortValueEdited)) {
+                        RxToast.warning("端口号不能为空!");
+                        configAppParams();
+                        return;
+                    }
+                    lPortValueArr[0] = Integer.valueOf(lPortValueEdited);
+                    if (0 <= lPortValueArr[0] && lPortValueArr[0] <= 65535) {
+                        AppConfig.getSPUtils().put(AppConfig.KEY_FIRST_LAUNCH, false);
+                        AppConfig.getSPUtils().put(AppConfig.KEY_DATA_RECEIVE_PORT, lPortValueArr[0]);
+                        stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
+                        startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
+                        RxToast.warning("数据接收与解析服务已启动!");
+                    } else {
+                        RxToast.error("端口范围有误(0~65535),请重新输入!");
+                        configAppParams();
+                    }
+                }).show();
+    }
 
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME 幻灯片-------------------------------------------------------------------------------------------
@@ -415,7 +369,7 @@ public class MainActivity extends BaseActivity {
                             List<View> lViewList = new ArrayList<>();
                             for (String txtPath : mTxtPathList) {
                                 TextView lTvFlipping = new TextView(CustomApplication.getContext());
-                                lTvFlipping.setTextSize(60F);
+                                lTvFlipping.setTextSize(20F);
                                 lTvFlipping.setTextColor(Color.GREEN);
                                 lTvFlipping.setText(loadText(txtPath));
                                 lViewList.add(lTvFlipping);
@@ -424,12 +378,11 @@ public class MainActivity extends BaseActivity {
                             if (lViewList.size() <= 1) mTvvmTxt.stopFlipping();
                             RxToast.warning("收到    新文本");
                         } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                          //③播放音频
-                            if (mMusicPathList.size() > 0) mNextMusicIndex = mNextMusicIndex % mMusicPathList.size();
+                            if (!mMusicPathList.isEmpty()) mNextMusicIndex = mNextMusicIndex % mMusicPathList.size();
                             mMusicPathList.add(mNextMusicIndex, mFilePath);//加入 新的音频文件 到当前正在播放的音频位置
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
                                 mMediaPlayer.reset();
                                 mVvVideo.suspend();
-                                if (mVvVideo.getVisibility() == View.VISIBLE) mVvVideo.setVisibility(View.GONE);
                             }
 
                             mMusicPlayerHandler.removeCallbacksAndMessages(null);
@@ -438,7 +391,7 @@ public class MainActivity extends BaseActivity {
                                 public void run() {
                                     mMusicPlayerHandler.postDelayed(this, 30 * 1000);//放在首行,始终向后检查
                                     try {
-                                        if (mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//音频 或 视频 正在播放,则终止本次逻辑
+                                        if (mMusicPathList.isEmpty() || mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//列表无音频,音频 或 视频 正在播放,则终止本次逻辑
                                         mMediaPlayer.reset();
                                         mMediaPlayer.setDataSource(mMusicPathList.get(mNextMusicIndex++ % mMusicPathList.size()));
                                         mMediaPlayer.prepareAsync();
@@ -450,7 +403,7 @@ public class MainActivity extends BaseActivity {
                             RxToast.warning("收到    新音频");
                         } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb")
                                 || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {                                                          //④播放视频
-                            if (mVideoPathList.size() > 0) mNextVideoIndex = mNextVideoIndex % mVideoPathList.size();
+                            if (!mVideoPathList.isEmpty()) mNextVideoIndex = mNextVideoIndex % mVideoPathList.size();
                             mVideoPathList.add(mNextVideoIndex, mFilePath);//加入 新的视频文件 到当前正在播放的视频位置
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
                                 mMediaPlayer.reset();
@@ -461,9 +414,9 @@ public class MainActivity extends BaseActivity {
                             mVideoPlayerHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
-                                    mVideoPlayerHandler.postDelayed(this, 30 * 1000);
+                                    mVideoPlayerHandler.postDelayed(this, 30 * 1000);//放在首行,始终向后检查
                                     try {
-                                        if (mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//音频 或 视频 正在播放,则终止本次逻辑
+                                        if (mVideoPathList.isEmpty() || mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//列表无视频,音频 或 视频 正在播放,则终止本次逻辑
                                         if (mVvVideo.getVisibility() == View.GONE) mVvVideo.setVisibility(View.VISIBLE);
                                         mVvVideo.setVideoPath(mVideoPathList.get(mNextVideoIndex++ % mVideoPathList.size()));
                                     } catch (Exception e) {
@@ -519,7 +472,7 @@ public class MainActivity extends BaseActivity {
 
             @Override//FIXME 绑定数据
             public void onBind(Context context, int position, String imagePath) {
-                Glide.with(context).load(imagePath).diskCacheStrategy(DiskCacheStrategy.RESULT).crossFade().skipMemoryCache(true).into(mIvLanternSlideItem);
+                Glide.with(CustomApplication.getContext()).load(imagePath).diskCacheStrategy(DiskCacheStrategy.RESULT).skipMemoryCache(true).into(mIvLanternSlideItem);
             }
         }
     }

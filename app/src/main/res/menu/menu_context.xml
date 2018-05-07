@@ -2,9 +2,12 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
       xmlns:tools="http://schemas.android.com/tools"
       tools:ignore="HardcodedText">
-    <group>
-        <item
-            android:id="@+id/server_ip_port_set"
-            android:title="服务器IP、端口配置"/>
-    </group>
+    <item
+        android:id="@+id/local_wifi_net_set"
+        android:icon="@mipmap/ic_launcher"
+        android:title="@string/local_wifi_config"/>
+    <item
+        android:id="@+id/server_port_set"
+        android:icon="@mipmap/ic_launcher"
+        android:title="@string/data_receive_port_config"/>
 </menu>

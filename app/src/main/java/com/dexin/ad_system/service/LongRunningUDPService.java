@@ -5,7 +5,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.BitmapFactory;
 import android.net.wifi.WifiManager;
-import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
@@ -33,7 +32,6 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.text.MessageFormat;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -56,46 +54,12 @@ public final class LongRunningUDPService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        startForeground(1, new NotificationCompat.Builder(CustomApplication.getContext(), "ForegroundService")
-                .setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher)).setSmallIcon(R.mipmap.ic_launcher).setContentTitle("CDR广告系统").setContentText("请求网络数据的前台服务.")
-                .setWhen(System.currentTimeMillis()).build());
+        startForeground(1, new NotificationCompat.Builder(CustomApplication.getContext(), "ForegroundService").setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher)).setSmallIcon(R.mipmap.ic_launcher).setContentTitle("CDR广告系统").setContentText("请求网络数据的前台服务.").setWhen(System.currentTimeMillis()).build());
         initWifiLockAndMulticastLockInOnCreate();//初始化 Wifi锁 和 多播锁
 
         if (mUDPPackProducerThread == null) mUDPPackProducerThread = new UDPPackProducerThread();
         if (mPayloadConsumerThread == null) mPayloadConsumerThread = new PayloadConsumerThread();
         if (mCusDataConsumerThread == null) mCusDataConsumerThread = new CusDataConsumerThread();
-
-        Intent S_CONFIG_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);
-        Intent S_ELEMENT_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);
-        List<String> lFileNameList = new ArrayList<>();
-        lFileNameList.add("111.txt");
-        lFileNameList.add("222.txt");
-        lFileNameList.add("333.txt");
-        lFileNameList.add("111.jpg");
-        lFileNameList.add("222.ipg");
-        lFileNameList.add("333.jpg");
-        lFileNameList.add("111.mp3");
-        lFileNameList.add("222.mp3");
-        lFileNameList.add("333.mp3");
-        lFileNameList.add("111.mp4");
-        lFileNameList.add("222.mp4");
-        lFileNameList.add("333.mp4");
-        Handler lHandler = new Handler();
-        lHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                AppConfig.getLocalBroadcastManager().sendBroadcast(S_ELEMENT_TABLE_INTENT.putExtra(AppConfig.KEY_FILE_NAME, lFileNameList.get((int) (Math.random() * lFileNameList.size()))));//1.应该先发送广播"请求清空分类文件集合"
-                lHandler.postDelayed(this, 10 * 1000);
-            }
-        }, 5000);
-
-//        lHandler.postDelayed(new Runnable() {
-//            @Override
-//            public void run() {
-//                AppConfig.getLocalBroadcastManager().sendBroadcast(S_CONFIG_TABLE_INTENT);//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
-//                lHandler.postDelayed(this, 120 * 1000);
-//            }
-//        }, 120 * 1000);
     }
 
     @Override
@@ -176,7 +140,7 @@ public final class LongRunningUDPService extends Service {
                 if (mDatagramSocket == null) {
                     mDatagramSocket = new DatagramSocket(null);
                     mDatagramSocket.setReuseAddress(true);//地址复用
-                    if (mSocketAddress == null) mSocketAddress = new InetSocketAddress(AppConfig.PORT);
+                    if (mSocketAddress == null) mSocketAddress = new InetSocketAddress(AppConfig.getSPUtils().getInt(AppConfig.KEY_DATA_RECEIVE_PORT, AppConfig.DEFAULT_DATA_RECEIVE_PORT));
                     mDatagramSocket.bind(mSocketAddress);//绑定端口
                 }
                 if (mDatagramPacket == null) mDatagramPacket = new DatagramPacket(mUdpPackContainer, mUdpPackContainer.length);//建立一个指定缓冲区大小的数据包
@@ -373,6 +337,10 @@ public final class LongRunningUDPService extends Service {
         private void stopCusDataConsumerThreadSafely() {
             isNeedParsePayloadData = false;
             mCusDataArrayBlockingQueue.clear();
+            {//FIXME 必须 重置版本号 和 清空现在已接收集合
+                sVersionNumberInConfigTable = -1;
+                mCDRElementLongSparseArray.clear();
+            }
             LogUtil.e(TAG, "################################################ 结束解析自定义协议数据 ################################################");
         }
 
@@ -408,7 +376,6 @@ public final class LongRunningUDPService extends Service {
         private static void parseConfigTable(byte[] configTableBuffer) {
             LogUtil.e(TAG, "收到配置表数据段,开始解析====>");
 //            LogUtil.d(TAG, MessageFormat.format("配置表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(configTableBuffer).toUpperCase(Locale.getDefault())));
-
             CopyIndex lCopyIndex = new CopyIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1);//下标先偏移到 87位置 之后,再开始做解析工作
             int version_number = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);          //2.配置表：“版本号”
             if (sVersionNumberInConfigTable == version_number) {
@@ -416,10 +383,10 @@ public final class LongRunningUDPService extends Service {
                 return;
             }
             int section_length = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);         //3.配置表：“段长度”
-            if (section_length != (AppConfig.CUS_DATA_SIZE - AppConfig.TABLE_DISCRIMINATOR_INDEX - 1 - 1 - 2)) {//段长度必定是 1024 - 4 - 1 - 1 - 2 = 1016
-                LogUtil.e(TAG, "根据配置表中解析出 段长度 不是1024 - 4 - 1 - 1 - 2 = 1016,退出配置表解析操作!");
-                return;
-            }
+//            if (section_length != (AppConfig.CUS_DATA_SIZE - AppConfig.TABLE_DISCRIMINATOR_INDEX - 1 - 1 - 2)) {//段长度必定是 1024 - 4 - 1 - 1 - 2 = 1016
+//                LogUtil.e(TAG, "根据配置表中解析出 段长度 是 " + section_length + ",不是1024 - 4 - 1 - 1 - 2 = 1016,退出配置表解析操作!");
+//                return;
+//            }
             int section_number = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);         //4.配置表：“当前段号”
 //            if (section_number != 0) {                LogUtil.e(TAG, "根据配置表中解析出 当前段号 不是0x 0000,退出配置表解析操作!");                return;            }
             int section_count = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);          //5.配置表：“段数量”
@@ -486,10 +453,10 @@ public final class LongRunningUDPService extends Service {
                 return;
             }
             int section_length = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
-            if (section_length != (AppConfig.CUS_DATA_SIZE - AppConfig.TABLE_DISCRIMINATOR_INDEX - 1 - 1 - 2)) {//段长度必定是 1024 - 4 - 1 - 1 - 2 = 1016
-                LogUtil.e(TAG, "根据元素表中解析出 段长度 不是1024 - 4 - 1 - 1 - 2 = 1016,退出元素表解析操作!");
-                return;
-            }
+//            if (section_length != (AppConfig.CUS_DATA_SIZE - AppConfig.TABLE_DISCRIMINATOR_INDEX - 1 - 1 - 2)) {//段长度必定是 1024 - 4 - 1 - 1 - 2 = 1016
+//                LogUtil.e(TAG, "根据元素表中解析出 段长度 是 " + section_length + ",不是1024 - 4 - 1 - 1 - 2 = 1016,退出元素表解析操作!");
+//                return;
+//            }
             int section_number = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
 //            if (section_number == 20) LogUtil.d(TAG, MessageFormat.format("元素表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBB:\t\t{0}\t{1}", mCusDataArrayBlockingQueue.size(), stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
             int section_count = arrayhelpers.GetInt16(sectionBuffer, lCopyIndex);
@@ -536,19 +503,18 @@ public final class LongRunningUDPService extends Service {
             }
 
             //FIXME 将当前元素段中解析出的文件数据写入磁盘
-            File lFile = new File(AppConfig.MEDIA_FILE_FOLDER, MessageFormat.format("{0}{1}", element_guid, ELEMENT_FORMAT[element_format]));
+            final File lFile = new File(AppConfig.MEDIA_FILE_FOLDER, MessageFormat.format("{0}{1}", element_guid, ELEMENT_FORMAT[element_format]));
             FileUtils.createOrExistsFile(lFile);//判断文件是否存在,不存在则创建文件
             try (RandomAccessFile lRandomAccessFile = new RandomAccessFile(lFile, "rw")) {
                 lRandomAccessFile.seek(section_number * 998L);//偏移工作(断点续写):(AppConfig.CUS_DATA_SIZE - (AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 4 + 1 + 1 + 4 + 4)) = 998
                 lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 4 + 1 + 1 + 4);
                 lRandomAccessFile.write(arrayhelpers.GetBytes(sectionBuffer, section_data_length, lCopyIndex));//FIXME 当前数据长度要改动
                 lRandomAccessFile.close();
-                LogUtil.e(TAG, MessageFormat.format("GUID:{0},当前段号:{1},接收比例:{2}／{3}", String.valueOf(element_guid), String.valueOf(section_number), String.valueOf(sSectionsNumberList.size()), String.valueOf(section_count)));
-
                 sSectionsNumberList.add(section_number);
+                LogUtil.e(TAG, MessageFormat.format("GUID:{0},当前段号:{1},接收比例:{2}／{3}", String.valueOf(element_guid), String.valueOf(section_number), String.valueOf(sSectionsNumberList.size()), String.valueOf(section_count)));
                 if (sSectionsNumberList.size() == section_count) {
                     LogUtil.i(TAG, MessageFormat.format("########################################################## 当前文件\t\t{0}\t\t接收完成 ##########################################################", lFile.getName()));
-                    AppConfig.getLocalBroadcastManager().sendBroadcast(S_ELEMENT_TABLE_INTENT.putExtra(AppConfig.KEY_FILE_NAME, lFile.getName()));//FIXME 删除多媒体文件夹 和 清除分类文件集合 的逻辑
+                    AppConfig.getLocalBroadcastManager().sendBroadcast(S_ELEMENT_TABLE_INTENT.putExtra(AppConfig.KEY_FILE_NAME, lFile.getName()));
                 }
             } catch (Exception e) {
                 Logger.t(TAG).e(e, "parseSectionData0: ");
