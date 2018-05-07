@@ -116,7 +116,7 @@ public class MainActivity extends BaseActivity {
             //先停止、再启动Service
             stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
             startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-            RxToast.info("数据接收与解析服务已启动!");
+            RxToast.warning("数据接收与解析服务已启动!");
         }
     }
 
@@ -199,7 +199,7 @@ public class MainActivity extends BaseActivity {
                         AppConfig.getSPUtils().put("port", portValue);             //点击了“确定”才认为APP不再是第一次启动了，并且设置了IP和端口号
                         stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
                         startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-                        RxToast.info("数据接收与解析服务已启动!");
+                        RxToast.warning("数据接收与解析服务已启动!");
                     } else {
                         Toast.makeText(CustomApplication.getContext(), "您输入的 IP 或 端口 不符合格式要求。\n请长按屏幕重新设置。", Toast.LENGTH_LONG).show();
                         setServerIP_Port();//TODO 弹出对话框请求重新输入
@@ -281,7 +281,14 @@ public class MainActivity extends BaseActivity {
     private final MediaPlayer mMediaPlayer = new MediaPlayer();//音乐播放器
 
     private void initMediaPlayerInOnCreate() {
-        mMediaPlayer.setOnPreparedListener(mediaPlayer -> RxToast.info("开始播放 音频!"));
+        mMediaPlayer.setOnPreparedListener(mediaPlayer -> {
+            RxToast.info("开始播放 音频!");
+            {//释放视频
+                mVvVideo.suspend();
+                if (mVvVideo.getVisibility() == View.VISIBLE) mVvVideo.setVisibility(View.GONE);
+            }
+            mediaPlayer.start();
+        });
         mMediaPlayer.setOnCompletionListener(mediaPlayer -> RxToast.info("本段 音频 播放完毕!"));
     }
 
@@ -293,13 +300,17 @@ public class MainActivity extends BaseActivity {
 
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME VideoView 视频播放器-----------------------------------------------------------------------------
-    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓---------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓-----------------------------------------------------------------------------
     @BindView(R.id.vv_video)
     VideoView mVvVideo;
     private static final Handler mVideoPlayerHandler = new Handler();
 
     private void initVideoResourceInOnCreate() {
-        mVvVideo.setOnPreparedListener(mediaPlayer -> RxToast.info("开始播放 视频!"));
+        mVvVideo.setOnPreparedListener(mediaPlayer -> {
+            RxToast.info("开始播放 视频!");
+            mMediaPlayer.reset();//释放音频
+            mVvVideo.start();
+        });
         mVvVideo.setOnCompletionListener(mediaPlayer -> {
             mVvVideo.setVisibility(View.GONE);
             RxToast.info("本段 视频 播放完毕!");
@@ -395,7 +406,7 @@ public class MainActivity extends BaseActivity {
                             mMzbvLanternSlideView.pause();
                             mMzbvLanternSlideView.setPages(mImagePathList, mMZLanternSlideHolderCreator);
                             mMzbvLanternSlideView.start();
-                            RxToast.info("收到    新图片");
+                            RxToast.warning("收到    新图片");
                         } else if (mFilePath.endsWith(".txt")) {                                                                                        //②播放文字
                             mTvvmTxt.stopFlipping();//始终先释放资源
                             mTvvmTxt.removeAllViews();
@@ -411,14 +422,16 @@ public class MainActivity extends BaseActivity {
                             }
                             mTvvmTxt.setViews(lViewList);
                             if (lViewList.size() <= 1) mTvvmTxt.stopFlipping();
-                            RxToast.info("收到    新文本");
+                            RxToast.warning("收到    新文本");
                         } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                          //③播放音频
+                            if (mMusicPathList.size() > 0) mNextMusicIndex = mNextMusicIndex % mMusicPathList.size();
                             mMusicPathList.add(mNextMusicIndex, mFilePath);//加入 新的音频文件 到当前正在播放的音频位置
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
                                 mMediaPlayer.reset();
                                 mVvVideo.suspend();
                                 if (mVvVideo.getVisibility() == View.VISIBLE) mVvVideo.setVisibility(View.GONE);
                             }
+
                             mMusicPlayerHandler.removeCallbacksAndMessages(null);
                             mMusicPlayerHandler.post(new Runnable() {
                                 @Override
@@ -428,22 +441,22 @@ public class MainActivity extends BaseActivity {
                                         if (mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//音频 或 视频 正在播放,则终止本次逻辑
                                         mMediaPlayer.reset();
                                         mMediaPlayer.setDataSource(mMusicPathList.get(mNextMusicIndex++ % mMusicPathList.size()));
-                                        mNextMusicIndex = mNextMusicIndex % mMusicPathList.size();
-                                        mMediaPlayer.prepare();
-                                        mMediaPlayer.start();
+                                        mMediaPlayer.prepareAsync();
                                     } catch (Exception e) {
                                         Logger.t(TAG).e(e, "run: ");
                                     }
                                 }
                             });
-                            RxToast.info("收到    新音频");
+                            RxToast.warning("收到    新音频");
                         } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb")
                                 || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {                                                          //④播放视频
+                            if (mVideoPathList.size() > 0) mNextVideoIndex = mNextVideoIndex % mVideoPathList.size();
                             mVideoPathList.add(mNextVideoIndex, mFilePath);//加入 新的视频文件 到当前正在播放的视频位置
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
                                 mMediaPlayer.reset();
                                 mVvVideo.suspend();
                             }
+
                             mVideoPlayerHandler.removeCallbacksAndMessages(null);
                             mVideoPlayerHandler.post(new Runnable() {
                                 @Override
@@ -453,14 +466,12 @@ public class MainActivity extends BaseActivity {
                                         if (mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//音频 或 视频 正在播放,则终止本次逻辑
                                         if (mVvVideo.getVisibility() == View.GONE) mVvVideo.setVisibility(View.VISIBLE);
                                         mVvVideo.setVideoPath(mVideoPathList.get(mNextVideoIndex++ % mVideoPathList.size()));
-                                        mNextVideoIndex = mNextVideoIndex % mVideoPathList.size();
-                                        mVvVideo.start();
                                     } catch (Exception e) {
                                         Logger.t(TAG).e(e, "run: ");
                                     }
                                 }
                             });
-                            RxToast.info("收到    新视频");
+                            RxToast.warning("收到    新视频");
                         }
                         break;
                     default:
