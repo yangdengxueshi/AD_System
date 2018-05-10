@@ -31,8 +31,11 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.text.MessageFormat;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 
 public final class LongRunningUDPService extends Service {
@@ -303,6 +306,7 @@ public final class LongRunningUDPService extends Service {
      */
     private static final class CusDataConsumerThread extends Thread {
         private static final String TAG = "TAG_CusDataConsumerThread";
+        private static final HashMap<String, String> FILE_RECEIVE_PROPORTION_MAP = new HashMap<>();
         private volatile boolean isNeedParsePayloadData;
 
         @Override
@@ -410,6 +414,7 @@ public final class LongRunningUDPService extends Service {
             long lElementGuid;
             int element_format;
             mCDRElementLongSparseArray.clear();
+            FILE_RECEIVE_PROPORTION_MAP.clear();
             for (int i = 0; i < element_count; i++) {
                 lElementGuid = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);
                 lCopyIndex.AddIndex(1);//类型
@@ -417,8 +422,9 @@ public final class LongRunningUDPService extends Service {
                 if (mCDRElementLongSparseArray.indexOfKey(lElementGuid) < 0) {
                     Element lElement = new Element();
                     lElement.setVersionNumber(version_number);
-                    if (element_format < ELEMENT_FORMAT.length) lElement.setFileName(lElementGuid + ELEMENT_FORMAT[element_format]);
+                    if (element_format < ELEMENT_FORMAT.length) lElement.setFileName(MessageFormat.format("{0}{1}", lElementGuid, ELEMENT_FORMAT[element_format]));
                     mCDRElementLongSparseArray.put(lElementGuid, lElement);
+                    FILE_RECEIVE_PROPORTION_MAP.put(lElement.getFileName(), "0");
                     LogUtil.i(TAG, MessageFormat.format("根据配置表中解析出 待接收文件:{0}", lElement.getFileName()));
                 }
                 lCopyIndex.AddIndex(1 + 1);//保留位
@@ -429,6 +435,7 @@ public final class LongRunningUDPService extends Service {
 
         private static final String[] ELEMENT_FORMAT = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};//.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
         private static final Intent S_ELEMENT_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);
+        private static final Intent S_FILE_RECEIVE_PROPORTION_INTENT = new Intent(AppConfig.ACTION_RECEIVE_PROPORTION);
 
         /**
          * 解析段的数据,并写入文件; 长度已经事先拼接好了,不用再考虑解析完成后剩余内容的拼接问题
@@ -507,7 +514,16 @@ public final class LongRunningUDPService extends Service {
                 lRandomAccessFile.write(arrayhelpers.GetBytes(sectionBuffer, section_data_length, lCopyIndex));//FIXME 当前数据长度要改动
                 lRandomAccessFile.close();
                 sSectionsNumberList.add(section_number);
-                LogUtil.e(TAG, MessageFormat.format("GUID:{0},当前段号:{1},接收比例:{2}／{3}", String.valueOf(element_guid), String.valueOf(section_number), String.valueOf(sSectionsNumberList.size()), String.valueOf(section_count)));
+                LogUtil.e(TAG, MessageFormat.format("GUID:{0},当前段号:{1},接收比例:{2}/{3}", String.valueOf(element_guid), String.valueOf(section_number), String.valueOf(sSectionsNumberList.size()), String.valueOf(section_count)));
+                {//FIXME 发送广播"更新文件接收信息"
+                    FILE_RECEIVE_PROPORTION_MAP.put(lFile.getName(), MessageFormat.format("{0}/{1}", String.valueOf(sSectionsNumberList.size()), String.valueOf(section_count)));
+                    StringBuilder lAllFileReceiveProportionInfo = new StringBuilder();
+                    Set<Map.Entry<String, String>> lFileReceiveProportionEntrySet = FILE_RECEIVE_PROPORTION_MAP.entrySet();
+                    for (Map.Entry<String, String> fileReceiveProportionMapEntry : lFileReceiveProportionEntrySet) {
+                        lAllFileReceiveProportionInfo.append(fileReceiveProportionMapEntry.getKey()).append("\t\t\t").append(fileReceiveProportionMapEntry.getValue()).append("\n");
+                    }
+                    AppConfig.getLocalBroadcastManager().sendBroadcast(S_FILE_RECEIVE_PROPORTION_INTENT.putExtra(AppConfig.KEY_RECEIVE_PROPORTION, lAllFileReceiveProportionInfo.toString()));//发送"数据接收比例"广播
+                }
                 if (sSectionsNumberList.size() == section_count) {
                     LogUtil.i(TAG, MessageFormat.format("########################################################## 当前文件\t\t{0}\t\t接收完成 ##########################################################", lFile.getName()));
                     AppConfig.getLocalBroadcastManager().sendBroadcast(S_ELEMENT_TABLE_INTENT.putExtra(AppConfig.KEY_FILE_NAME, lFile.getName()));
