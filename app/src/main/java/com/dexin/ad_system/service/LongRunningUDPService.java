@@ -21,6 +21,7 @@ import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
 import com.dexin.utilities.stringhelpers;
 import com.orhanobut.logger.Logger;
+import com.vondear.rxtools.view.RxToast;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
@@ -56,6 +57,11 @@ public final class LongRunningUDPService extends Service {
     public void onCreate() {
         super.onCreate();
         startForeground(1, new NotificationCompat.Builder(CustomApplication.getContext(), "ForegroundService").setLargeIcon(BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher)).setSmallIcon(R.mipmap.ic_launcher).setContentTitle("CDR广告系统").setContentText("请求网络数据的前台服务.").setWhen(System.currentTimeMillis()).build());
+        {
+            FileUtils.createOrExistsDir(AppConfig.MEDIA_FILE_FOLDER);
+            AppConfig.getSPUtils().put(AppConfig.KEY_DATA_RECEIVE_OR_NOT, true);
+            RxToast.success("已启动数据接收与解析服务!");
+        }
         initWifiLockAndMulticastLockInOnCreate();//初始化 Wifi锁 和 多播锁
 
         if (mUDPPackProducerThread == null) mUDPPackProducerThread = new UDPPackProducerThread();
@@ -73,8 +79,12 @@ public final class LongRunningUDPService extends Service {
 
     @Override
     public void onDestroy() {
+        {
+            AppConfig.getSPUtils().put(AppConfig.KEY_DATA_RECEIVE_OR_NOT, false);
+            RxToast.error("已停止数据接收与解析服务!");
+        }
         if (mUDPPackProducerThread != null) {
-            mUDPPackProducerThread.stopPayloadProducerThreadSafely();
+            mUDPPackProducerThread.stopUDPPackProducerThreadSafely();
             mUDPPackProducerThread = null;
         }
         mUDPPackArrayBlockingQueue.clear();
@@ -171,11 +181,16 @@ public final class LongRunningUDPService extends Service {
         }
 
         /**
-         * 安全地 停止"净荷生产者线程"
+         * 安全地 停止"UDP包生产者线程"
          */
-        private void stopPayloadProducerThreadSafely() {
+        private void stopUDPPackProducerThreadSafely() {
             isNeedReceiveUDP = false;
             mUDPPackArrayBlockingQueue.clear();
+            if (mDatagramSocket != null) {
+                if (mDatagramSocket.isConnected()) mDatagramSocket.disconnect();
+                if (!mDatagramSocket.isClosed()) mDatagramSocket.close();
+                mDatagramSocket = null;
+            }
             LogUtil.e(TAG, "##################################### CDRWifiReceive 服务关闭,结束接收CDR_Wifi_UDP数据包 #######################################");
         }
     }

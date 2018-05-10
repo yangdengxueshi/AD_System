@@ -21,13 +21,13 @@ import android.widget.NumberPicker;
 import android.widget.TextView;
 import android.widget.VideoView;
 
-import com.blankj.utilcode.util.FileUtils;
 import com.dexin.ad_system.R;
 import com.dexin.ad_system.adapter.LanternSlideAdapter;
 import com.dexin.ad_system.app.AppConfig;
 import com.dexin.ad_system.app.CustomApplication;
 import com.dexin.ad_system.service.LongRunningUDPService;
 import com.orhanobut.logger.Logger;
+import com.vondear.rxtools.RxNetTool;
 import com.vondear.rxtools.view.RxTextViewVerticalMore;
 import com.vondear.rxtools.view.RxToast;
 
@@ -52,6 +52,7 @@ public class MainActivity extends BaseActivity {
         initMediaPlayerInOnCreate();
         initVideoResourceInOnCreate();
         initDataTableReceiverResourceInOnCreate();
+        startDataReceiveServiceInOnCreate();
     }
 
     @Override
@@ -60,7 +61,6 @@ public class MainActivity extends BaseActivity {
         startLanternSlideInOnResume();
         startMarqueeTextViewInOnResume();
         registerForContextMenuInOnResume();
-        startDataReceiveServiceInOnResume();
     }
 
     @Override
@@ -74,6 +74,7 @@ public class MainActivity extends BaseActivity {
 
     @Override
     protected void onDestroy() {
+        stopDataReceiveService();
         releaseMarqueeTextViewResourceInOnDestroy();
         releaseMusicPlayerResourceInOnDestroy();
         releaseDataTableResourceInOnDestroy();
@@ -84,6 +85,22 @@ public class MainActivity extends BaseActivity {
     public static Intent createIntent(Context context) {
         return new Intent(context, MainActivity.class);
     }
+
+
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------FIXME 数据接收服务操作逻辑-------------------------------------------------------------------------------
+    //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓-------------------------------------------------------------------------------
+    private static final Intent lLongRunningUDPServiceIntent = new Intent(CustomApplication.getContext(), LongRunningUDPService.class);
+
+    private void startDataReceiveService() {
+        stopService(lLongRunningUDPServiceIntent);
+        startService(lLongRunningUDPServiceIntent);
+    }
+
+    private void stopDataReceiveService() {
+        stopService(lLongRunningUDPServiceIntent);
+    }
+
 
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME 返回键被点击--------------------------------------------------------------------------------------
@@ -105,7 +122,6 @@ public class MainActivity extends BaseActivity {
     //------------------------------------------------------------------------------FIXME 上下文菜单---------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓---------------------------------------------------------------------------------------
     private static final Intent WIFI_SETTINGS_INTENT = new Intent(Settings.ACTION_WIFI_SETTINGS);
-    private static final Intent lLongRunningUDPServiceIntent = new Intent(CustomApplication.getContext(), LongRunningUDPService.class);
     @BindView(R.id.v_menu)
     View mVMenu;
 
@@ -119,10 +135,16 @@ public class MainActivity extends BaseActivity {
 
     @Override
     public void onCreateContextMenu(ContextMenu menu, View view, ContextMenu.ContextMenuInfo contextMenuInfo) {
-        getMenuInflater().inflate(R.menu.menu_context, menu);
-        menu.setHeaderTitle("程序设置");
-        menu.setHeaderIcon(R.drawable.icon_settings);
-        super.onCreateContextMenu(menu, view, contextMenuInfo);
+        if (!RxNetTool.isWifiConnected(CustomApplication.getContext())) {
+            RxToast.warning(AppConfig.TIP_CONNECT_TO_WIFI);
+            startActivity(WIFI_SETTINGS_INTENT);
+        } else {
+            getMenuInflater().inflate(R.menu.menu_context, menu);
+            menu.setHeaderTitle("程序设置");
+            menu.setHeaderIcon(R.drawable.icon_settings);
+            menu.findItem(R.id.data_receive_set).setChecked(AppConfig.getSPUtils().getBoolean(AppConfig.KEY_DATA_RECEIVE_OR_NOT));
+            super.onCreateContextMenu(menu, view, contextMenuInfo);
+        }
     }
 
     @Override
@@ -134,6 +156,13 @@ public class MainActivity extends BaseActivity {
             case R.id.app_set:                  //FIXME 应用程序配置
                 configApplication();
                 break;
+            case R.id.data_receive_set:
+                if (item.isChecked()) {//原先被选中,现在再次点击关闭"数据接收"
+                    stopDataReceiveService();
+                } else {//原先未选中,现在再次点击开启"数据接收"
+                    startDataReceiveService();
+                }
+                break;
         }
         return super.onContextItemSelected(item);
     }
@@ -141,14 +170,15 @@ public class MainActivity extends BaseActivity {
     /**
      * 启动"数据接收服务"
      */
-    private void startDataReceiveServiceInOnResume() {
-        if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_LAUNCH, true)) {
-            configApplication();
+    private void startDataReceiveServiceInOnCreate() {
+        if (!RxNetTool.isWifiConnected(CustomApplication.getContext())) {
+            RxToast.warning(AppConfig.TIP_CONNECT_TO_WIFI);
         } else {
-            FileUtils.createOrExistsDir(AppConfig.MEDIA_FILE_FOLDER);
-            stopService(lLongRunningUDPServiceIntent);
-            startService(lLongRunningUDPServiceIntent);
-            RxToast.success("数据接收与解析服务已启动!");
+            if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_CONFIG, true)) {
+                configApplication();
+            } else {//TODO --------------------------------------------------------------------------------------------- Ping服务器并执行后续逻辑----------------------------------------------------------------------------------
+                startDataReceiveService();
+            }
         }
     }
 
@@ -168,18 +198,20 @@ public class MainActivity extends BaseActivity {
                 .setPositiveButton("确定", (dialog, which) -> {
                     int lPortValueParsed = (TextUtils.isEmpty(lEtPort.getText().toString())) ? -1 : Integer.valueOf(lEtPort.getText().toString());
                     if ((0 <= lPortValueParsed) && (lPortValueParsed <= 65535)) {
-                        if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_LAUNCH, true)) {
-                            AppConfig.getSPUtils().put(AppConfig.KEY_FIRST_LAUNCH, false);//缓存"程序从此不再是第一次启动"了
+                        if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_CONFIG, true)) {
+                            AppConfig.getSPUtils().put(AppConfig.KEY_FIRST_CONFIG, false);//缓存"程序从此不再是第一次启动"了
                         }
+                        boolean configChanged = false;
                         if (AppConfig.getSPUtils().getInt(AppConfig.KEY_AUDIO_VIDEO_INTERVAL, AppConfig.DEFAULT_AUDIO_VIDEO_INTERVAL_VALUE) != lNpAudioVideoInterval.getValue()) {
+                            configChanged = true;
                             AppConfig.getSPUtils().put(AppConfig.KEY_AUDIO_VIDEO_INTERVAL, lNpAudioVideoInterval.getValue());//缓存"音视频播放间隔"
                         }
                         if (AppConfig.getSPUtils().getInt(AppConfig.KEY_DATA_RECEIVE_PORT) != lPortValueParsed) {//"数据接收端口"已更改
+                            configChanged = true;
                             AppConfig.getSPUtils().put(AppConfig.KEY_DATA_RECEIVE_PORT, lPortValueParsed);
-                            stopService(lLongRunningUDPServiceIntent);
-                            startService(lLongRunningUDPServiceIntent);
+                            startDataReceiveService();
                         }
-                        RxToast.success("配置已生效!");
+                        RxToast.info(configChanged ? "新配置已生效!" : "您未对配置作出修改!");
                     } else {
                         RxToast.error("原端口输入有误(0~65535),请重新输入!");
                         configApplication();

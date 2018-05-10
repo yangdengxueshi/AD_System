@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menu xmlns:android="http://schemas.android.com/apk/res/android"
-      xmlns:tools="http://schemas.android.com/tools"
-      tools:ignore="HardcodedText">
+<menu
+    xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/local_wifi_net_set"
         android:icon="@mipmap/ic_launcher"
@@ -10,4 +9,13 @@
         android:id="@+id/app_set"
         android:icon="@mipmap/ic_launcher"
         android:title="@string/app_config"/>
+
+    <group
+        android:id="@+id/aa"
+        android:checkableBehavior="all">
+        <item
+            android:id="@+id/data_receive_set"
+            android:icon="@mipmap/ic_launcher"
+            android:title="@string/receive_data_set"/>
+    </group>
 </menu>

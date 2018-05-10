@@ -3,5 +3,5 @@
     <string name="time_format">yyyy/M/d HH:mm:ss</string>
     <string name="local_wifi_config">本地WiFi配置</string>
     <string name="app_config">程序配置</string>
-    <string name="audio_video_interval">音视频间隔配置</string>
+    <string name="receive_data_set">接收数据</string>
 </resources>
