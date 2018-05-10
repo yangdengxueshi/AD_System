@@ -1,37 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <merge
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:keepScreenOn="true"
     tools:context="com.dexin.ad_system.activity.MainActivity">
 
-    <android.support.percent.PercentFrameLayout
+    <!--    android:visibility="gone"   -->
+    <AdapterViewFlipper
+        android:id="@+id/avf_lantern_slide_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="center">
+        android:flipInterval="8000"
+        android:loopViews="true"
+        android:visibility="gone"/>
 
-        <com.zhouwei.mzbanner.MZBannerView
-            android:id="@+id/mzbv_lantern_slide_view"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            app:canLoop="true"/>
+    <com.vondear.rxtools.view.RxTextViewVerticalMore
+        android:id="@+id/tvvm_txt"
+        android:layout_width="match_parent"
+        android:layout_height="150dp"
+        android:layout_gravity="bottom"/>
 
-        <com.vondear.rxtools.view.RxTextViewVerticalMore
-            android:id="@+id/tvvm_txt"
-            android:layout_gravity="bottom|center_horizontal"
-            android:layout_margin="15dp"
-            app:layout_heightPercent="26%"
-            app:layout_widthPercent="99%"/>
-    </android.support.percent.PercentFrameLayout>
-
+    <!--    android:visibility="gone"   -->
     <VideoView
         android:id="@+id/vv_video"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_gravity="center"
         android:visibility="gone"/>
 
     <TextClock

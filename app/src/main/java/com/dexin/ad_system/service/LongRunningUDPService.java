@@ -379,7 +379,7 @@ public final class LongRunningUDPService extends Service {
             CopyIndex lCopyIndex = new CopyIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1);//下标先偏移到 87位置 之后,再开始做解析工作
             int version_number = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);          //2.配置表：“版本号”
             if (sVersionNumberInConfigTable == version_number) {
-                LogUtil.e(TAG, "已经成功解析过相同版本号的配置表数据段,退出当前解析!");
+                LogUtil.i(TAG, "已经成功解析过相同版本号的配置表数据段,退出当前解析!");
                 return;
             }
             int section_length = arrayhelpers.GetInt16(configTableBuffer, lCopyIndex);         //3.配置表：“段长度”
@@ -419,7 +419,7 @@ public final class LongRunningUDPService extends Service {
             mCDRElementLongSparseArray.clear();
             for (int i = 0; i < element_count; i++) {
                 lElementGuid = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);
-                LogUtil.e(TAG, MessageFormat.format("根据配置表中解析出 元素GUID:{0}", lElementGuid));
+                LogUtil.i(TAG, MessageFormat.format("根据配置表中解析出 元素GUID:{0}", lElementGuid));
                 if (mCDRElementLongSparseArray.indexOfKey(lElementGuid) < 0) {
                     Element lElement = new Element();
                     lElement.setVersionNumber(version_number);
@@ -427,7 +427,7 @@ public final class LongRunningUDPService extends Service {
                 }
                 lCopyIndex.AddIndex(1 + 1 + 1 + 1);
             }//不用判断 element_count == mCDRElementLongSparseArray.size() ?
-            LogUtil.e(TAG, "################################################ 解析配置表成功! ################################################");
+            LogUtil.i(TAG, "################################################ 解析配置表成功! ################################################");
         }
 
 

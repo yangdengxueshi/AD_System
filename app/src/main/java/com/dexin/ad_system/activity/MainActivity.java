@@ -15,24 +15,20 @@ import android.text.TextUtils;
 import android.view.ContextMenu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.AdapterViewFlipper;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.VideoView;
 
 import com.blankj.utilcode.util.FileUtils;
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.dexin.ad_system.R;
+import com.dexin.ad_system.adapter.LanternSlideAdapter;
 import com.dexin.ad_system.app.AppConfig;
 import com.dexin.ad_system.app.CustomApplication;
 import com.dexin.ad_system.service.LongRunningUDPService;
 import com.orhanobut.logger.Logger;
 import com.vondear.rxtools.view.RxTextViewVerticalMore;
 import com.vondear.rxtools.view.RxToast;
-import com.zhouwei.mzbanner.MZBannerView;
-import com.zhouwei.mzbanner.holder.MZHolderCreator;
-import com.zhouwei.mzbanner.holder.MZViewHolder;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -54,7 +50,6 @@ public class MainActivity extends BaseActivity {
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
-        initLanternSlideResourceInOnCreate();
         initMarqueeTextViewInOnCreate();
         initMediaPlayerInOnCreate();
         initVideoResourceInOnCreate();
@@ -80,7 +75,7 @@ public class MainActivity extends BaseActivity {
 
     @Override
     protected void onPause() {
-        pauseLanternSlideInOnPause();
+        stopLanternSlideInOnPause();
         stopMarqueeTextViewInOnPause();
         releaseVideoResourceInOnPause();
         super.onPause();
@@ -89,7 +84,6 @@ public class MainActivity extends BaseActivity {
     @Override
     protected void onDestroy() {
         unregisterForContextMenuInOnDestroy();
-        releaseLanternSlideResourceInOnDestroy();
         releaseMarqueeTextViewResourceInOnDestroy();
         releaseMusicPlayerResourceInOnDestroy();
         releaseDataTableResourceInOnDestroy();
@@ -187,23 +181,17 @@ public class MainActivity extends BaseActivity {
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME 幻灯片-------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓-------------------------------------------------------------------------------------------
-    @BindView(R.id.mzbv_lantern_slide_view)
-    MZBannerView<String> mMzbvLanternSlideView;
-
-    private void initLanternSlideResourceInOnCreate() {
-        mMzbvLanternSlideView.setDelayedTime(8000);
-    }
+    @BindView(R.id.avf_lantern_slide_view)
+    AdapterViewFlipper mAvfLanternSlideView;
 
     private void startLanternSlideInOnResume() {
-        mMzbvLanternSlideView.start();
+        if ((mAvfLanternSlideView.getVisibility() == View.VISIBLE) && !mAvfLanternSlideView.isFlipping()) {
+            mAvfLanternSlideView.startFlipping();
+        }
     }
 
-    private void pauseLanternSlideInOnPause() {
-        mMzbvLanternSlideView.pause();
-    }
-
-    private void releaseLanternSlideResourceInOnDestroy() {
-        mMzbvLanternSlideView.removeAllViews();
+    private void stopLanternSlideInOnPause() {
+        mAvfLanternSlideView.stopFlipping();
     }
 
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -312,7 +300,7 @@ public class MainActivity extends BaseActivity {
         private int mNextMusicIndex;//下一段音频路径
         private final List<String> mVideoPathList = new ArrayList<>();//"视频路径"列表
         private int mNextVideoIndex;//下一段视频路径
-        private final MZHolderCreator mMZLanternSlideHolderCreator = MZBVLanternSlideViewHolder::new;
+        private LanternSlideAdapter mLanternSlideAdapter;
 
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -321,9 +309,12 @@ public class MainActivity extends BaseActivity {
                     case AppConfig.ACTION_RECEIVE_CONFIG_TABLE://1.收到"新版本的配置表":
                         RxToast.warning("接收新数据中...,清除原数据!!!");
                         //①释放幻灯资源
-                        mMzbvLanternSlideView.pause();
-                        mMzbvLanternSlideView.removeAllViews();
-                        mMzbvLanternSlideView.setVisibility(View.GONE);
+                        if (mLanternSlideAdapter == null) {
+                            mLanternSlideAdapter = new LanternSlideAdapter(CustomApplication.getContext(), R.layout.item_view_flipper, mImagePathList);
+                            mAvfLanternSlideView.setAdapter(mLanternSlideAdapter);
+                        }
+                        mAvfLanternSlideView.stopFlipping();
+                        mAvfLanternSlideView.setVisibility(View.GONE);
 
                         //②释放文本资源
                         mTvvmTxt.stopFlipping();
@@ -355,11 +346,11 @@ public class MainActivity extends BaseActivity {
                         }
 
                         if (mFilePath.endsWith(".png") || mFilePath.endsWith(".bmp") || mFilePath.endsWith(".jpg") || mFilePath.endsWith(".gif")) {     //①播放幻灯片
-                            if (mMzbvLanternSlideView.getVisibility() == View.GONE) mMzbvLanternSlideView.setVisibility(View.VISIBLE);
-                            mImagePathList.add(0, mFilePath);
-                            mMzbvLanternSlideView.pause();
-                            mMzbvLanternSlideView.setPages(mImagePathList, mMZLanternSlideHolderCreator);
-                            mMzbvLanternSlideView.start();
+                            if (mAvfLanternSlideView.getVisibility() == View.GONE) mAvfLanternSlideView.setVisibility(View.VISIBLE);
+                            mImagePathList.add(mFilePath);
+                            if (mImagePathList.isEmpty()) break;
+                            mLanternSlideAdapter.notifyDataSetChanged();
+                            if (!mAvfLanternSlideView.isFlipping()) mAvfLanternSlideView.startFlipping();
                             RxToast.warning("收到    新图片");
                         } else if (mFilePath.endsWith(".txt")) {                                                                                        //②播放文字
                             mTvvmTxt.stopFlipping();//始终先释放资源
@@ -458,22 +449,6 @@ public class MainActivity extends BaseActivity {
                 }
             }
             return lStringBuilder.toString();
-        }
-
-        private final class MZBVLanternSlideViewHolder implements MZViewHolder<String> {
-            private ImageView mIvLanternSlideItem;
-
-            @Override//FIXME 返回页面布局
-            public View createView(Context context) {
-                mIvLanternSlideItem = new ImageView(CustomApplication.getContext());
-                mIvLanternSlideItem.setScaleType(ImageView.ScaleType.FIT_XY);
-                return mIvLanternSlideItem;
-            }
-
-            @Override//FIXME 绑定数据
-            public void onBind(Context context, int position, String imagePath) {
-                Glide.with(CustomApplication.getContext()).load(imagePath).diskCacheStrategy(DiskCacheStrategy.RESULT).skipMemoryCache(true).into(mIvLanternSlideItem);
-            }
         }
     }
 }
