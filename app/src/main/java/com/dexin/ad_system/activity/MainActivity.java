@@ -30,10 +30,7 @@ import com.orhanobut.logger.Logger;
 import com.vondear.rxtools.view.RxTextViewVerticalMore;
 import com.vondear.rxtools.view.RxToast;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStreamReader;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -347,7 +344,7 @@ public class MainActivity extends BaseActivity {
 
                         if (mFilePath.endsWith(".png") || mFilePath.endsWith(".bmp") || mFilePath.endsWith(".jpg") || mFilePath.endsWith(".gif")) {     //①播放幻灯片
                             if (mAvfLanternSlideView.getVisibility() == View.GONE) mAvfLanternSlideView.setVisibility(View.VISIBLE);
-                            mImagePathList.add(mFilePath);
+                            mImagePathList.add(0, mFilePath);
                             if (mImagePathList.isEmpty()) break;
                             mLanternSlideAdapter.notifyDataSetChanged();
                             if (!mAvfLanternSlideView.isFlipping()) mAvfLanternSlideView.startFlipping();
@@ -357,12 +354,13 @@ public class MainActivity extends BaseActivity {
                             mTvvmTxt.removeAllViews();
                             if (mTvvmTxt.getVisibility() == View.GONE) mTvvmTxt.setVisibility(View.VISIBLE);
                             mTxtPathList.add(0, mFilePath);
+                            if (mTxtPathList.isEmpty()) break;
                             List<View> lViewList = new ArrayList<>();
                             for (String txtPath : mTxtPathList) {
                                 TextView lTvFlipping = new TextView(CustomApplication.getContext());
                                 lTvFlipping.setTextSize(20F);
                                 lTvFlipping.setTextColor(Color.GREEN);
-                                lTvFlipping.setText(loadText(txtPath));
+                                lTvFlipping.setText(AppConfig.loadTextInFile(txtPath));
                                 lViewList.add(lTvFlipping);
                             }
                             mTvvmTxt.setViews(lViewList);
@@ -421,34 +419,6 @@ public class MainActivity extends BaseActivity {
                     default:
                 }
             }
-        }
-
-        /**
-         * 根据文本文件路径加载文字
-         *
-         * @param txtFilePath 文本文件路径
-         * @return 文本文件中的文字
-         */
-        @NonNull
-        private String loadText(String txtFilePath) {
-            StringBuilder lStringBuilder = new StringBuilder("        ");
-            BufferedReader lBufferedReader = null;
-            try {
-                lBufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(txtFilePath), AppConfig.UTF_8_CHAR_SET));
-                String lLineTxt;
-                while ((lLineTxt = lBufferedReader.readLine()) != null) {
-                    lStringBuilder.append(lLineTxt);
-                }
-            } catch (Exception e) {
-                Logger.t(TAG).e(e, "loadText: ");
-            } finally {
-                try {
-                    if (lBufferedReader != null) lBufferedReader.close();
-                } catch (Exception e) {
-                    Logger.t(TAG).e(e, "loadText: ");
-                }
-            }
-            return lStringBuilder.toString();
         }
     }
 }

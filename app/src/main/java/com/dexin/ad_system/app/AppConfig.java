@@ -3,15 +3,20 @@ package com.dexin.ad_system.app;
 import android.app.Activity;
 import android.app.Application;
 import android.app.Service;
+import android.support.annotation.NonNull;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.LocalBroadcastManager;
 
 import com.blankj.utilcode.util.SPUtils;
 import com.dexin.ad_system.util.LogUtil;
+import com.orhanobut.logger.Logger;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
 import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.Objects;
@@ -183,5 +188,37 @@ public final class AppConfig {
             if (isFound) return i;
         }
         return failure;
+    }
+
+    //------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    //------------------------------------------------------------------TODO 处理程序逻辑的封装方法------------------------------------------------------------------------
+    //------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓------------------------------------------------------------------------
+
+    /**
+     * 根据文本文件路径加载文字
+     *
+     * @param txtFilePath 文本文件路径
+     * @return 文本文件中的文字
+     */
+    @NonNull
+    public static String loadTextInFile(String txtFilePath) {
+        StringBuilder lStringBuilder = new StringBuilder("        ");
+        BufferedReader lBufferedReader = null;
+        try {
+            lBufferedReader = new BufferedReader(new InputStreamReader(new FileInputStream(txtFilePath), AppConfig.UTF_8_CHAR_SET));
+            String lLineTxt;
+            while ((lLineTxt = lBufferedReader.readLine()) != null) {
+                lStringBuilder.append(lLineTxt);
+            }
+        } catch (Exception e) {
+            Logger.t(TAG).e(e, "loadText: ");
+        } finally {
+            try {
+                if (lBufferedReader != null) lBufferedReader.close();
+            } catch (Exception e) {
+                Logger.t(TAG).e(e, "loadText: ");
+            }
+        }
+        return lStringBuilder.toString();
     }
 }
