@@ -7,7 +7,7 @@
         android:icon="@mipmap/ic_launcher"
         android:title="@string/local_wifi_config"/>
     <item
-        android:id="@+id/server_port_set"
+        android:id="@+id/app_set"
         android:icon="@mipmap/ic_launcher"
-        android:title="@string/data_receive_port_config"/>
+        android:title="@string/app_config"/>
 </menu>

@@ -17,6 +17,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterViewFlipper;
 import android.widget.EditText;
+import android.widget.NumberPicker;
 import android.widget.TextView;
 import android.widget.VideoView;
 
@@ -51,15 +52,6 @@ public class MainActivity extends BaseActivity {
         initMediaPlayerInOnCreate();
         initVideoResourceInOnCreate();
         initDataTableReceiverResourceInOnCreate();
-
-        if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_LAUNCH, true)) {
-            configAppParams();
-        } else {
-            FileUtils.createOrExistsDir(AppConfig.MEDIA_FILE_FOLDER);
-            stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-            startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-            RxToast.warning("数据接收与解析服务已启动!");
-        }
     }
 
     @Override
@@ -68,6 +60,7 @@ public class MainActivity extends BaseActivity {
         startLanternSlideInOnResume();
         startMarqueeTextViewInOnResume();
         registerForContextMenuInOnResume();
+        startDataReceiveServiceInOnResume();
     }
 
     @Override
@@ -75,12 +68,12 @@ public class MainActivity extends BaseActivity {
         stopLanternSlideInOnPause();
         stopMarqueeTextViewInOnPause();
         releaseVideoResourceInOnPause();
+        unregisterForContextMenuInOnPause();
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
-        unregisterForContextMenuInOnDestroy();
         releaseMarqueeTextViewResourceInOnDestroy();
         releaseMusicPlayerResourceInOnDestroy();
         releaseDataTableResourceInOnDestroy();
@@ -112,6 +105,7 @@ public class MainActivity extends BaseActivity {
     //------------------------------------------------------------------------------FIXME 上下文菜单---------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓---------------------------------------------------------------------------------------
     private static final Intent WIFI_SETTINGS_INTENT = new Intent(Settings.ACTION_WIFI_SETTINGS);
+    private static final Intent lLongRunningUDPServiceIntent = new Intent(CustomApplication.getContext(), LongRunningUDPService.class);
     @BindView(R.id.v_menu)
     View mVMenu;
 
@@ -119,7 +113,7 @@ public class MainActivity extends BaseActivity {
         registerForContextMenu(mVMenu);
     }
 
-    private void unregisterForContextMenuInOnDestroy() {
+    private void unregisterForContextMenuInOnPause() {
         unregisterForContextMenu(mVMenu);
     }
 
@@ -134,43 +128,61 @@ public class MainActivity extends BaseActivity {
     @Override
     public boolean onContextItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.local_wifi_net_set://FIXME 本地Wifi网络设置:
+            case R.id.local_wifi_net_set:       //FIXME 本地Wifi网络设置
                 startActivity(WIFI_SETTINGS_INTENT);
                 break;
-            case R.id.server_port_set://FIXME 设置"端口号"
-                configAppParams();
+            case R.id.app_set:                  //FIXME 应用程序配置
+                configApplication();
                 break;
         }
         return super.onContextItemSelected(item);
     }
 
     /**
-     * 配置App参数
+     * 启动"数据接收服务"
      */
-    private void configAppParams() {
-        final int[] lPortValueArr = {AppConfig.getSPUtils().getInt(AppConfig.KEY_DATA_RECEIVE_PORT, AppConfig.DEFAULT_DATA_RECEIVE_PORT)};
+    private void startDataReceiveServiceInOnResume() {
+        if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_LAUNCH, true)) {
+            configApplication();
+        } else {
+            FileUtils.createOrExistsDir(AppConfig.MEDIA_FILE_FOLDER);
+            stopService(lLongRunningUDPServiceIntent);
+            startService(lLongRunningUDPServiceIntent);
+            RxToast.success("数据接收与解析服务已启动!");
+        }
+    }
+
+    /**
+     * 配置应用程序
+     */
+    private void configApplication() {
         View lConfigLayout = getLayoutInflater().inflate(R.layout.layout_config, null);
         EditText lEtPort = lConfigLayout.findViewById(R.id.et_port);
-        lEtPort.setText(String.valueOf(lPortValueArr[0]));
+        NumberPicker lNpAudioVideoInterval = lConfigLayout.findViewById(R.id.np_audio_video_interval);
+        lEtPort.setText(String.valueOf(AppConfig.getSPUtils().getInt(AppConfig.KEY_DATA_RECEIVE_PORT, AppConfig.DEFAULT_DATA_RECEIVE_PORT)));
         lEtPort.setSelection(lEtPort.getText().toString().length());
-        new AlertDialog.Builder(MainActivity.this).setIcon(R.drawable.icon_settings).setTitle(R.string.data_receive_port_config).setView(lConfigLayout)
+        lNpAudioVideoInterval.setMinValue(30);
+        lNpAudioVideoInterval.setMaxValue(300);
+        lNpAudioVideoInterval.setValue(AppConfig.getSPUtils().getInt(AppConfig.KEY_AUDIO_VIDEO_INTERVAL, AppConfig.DEFAULT_AUDIO_VIDEO_INTERVAL_VALUE));
+        new AlertDialog.Builder(MainActivity.this).setCancelable(false).setIcon(R.drawable.icon_settings).setTitle(R.string.app_config).setView(lConfigLayout)
                 .setPositiveButton("确定", (dialog, which) -> {
-                    String lPortValueEdited = lEtPort.getText().toString();
-                    if (TextUtils.isEmpty(lPortValueEdited)) {
-                        RxToast.warning("端口号不能为空!");
-                        configAppParams();
-                        return;
-                    }
-                    lPortValueArr[0] = Integer.valueOf(lPortValueEdited);
-                    if (0 <= lPortValueArr[0] && lPortValueArr[0] <= 65535) {
-                        AppConfig.getSPUtils().put(AppConfig.KEY_FIRST_LAUNCH, false);
-                        AppConfig.getSPUtils().put(AppConfig.KEY_DATA_RECEIVE_PORT, lPortValueArr[0]);
-                        stopService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-                        startService(new Intent(CustomApplication.getContext(), LongRunningUDPService.class));
-                        RxToast.warning("数据接收与解析服务已启动!");
+                    int lPortValueParsed = (TextUtils.isEmpty(lEtPort.getText().toString())) ? -1 : Integer.valueOf(lEtPort.getText().toString());
+                    if ((0 <= lPortValueParsed) && (lPortValueParsed <= 65535)) {
+                        if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_LAUNCH, true)) {
+                            AppConfig.getSPUtils().put(AppConfig.KEY_FIRST_LAUNCH, false);//缓存"程序从此不再是第一次启动"了
+                        }
+                        if (AppConfig.getSPUtils().getInt(AppConfig.KEY_AUDIO_VIDEO_INTERVAL, AppConfig.DEFAULT_AUDIO_VIDEO_INTERVAL_VALUE) != lNpAudioVideoInterval.getValue()) {
+                            AppConfig.getSPUtils().put(AppConfig.KEY_AUDIO_VIDEO_INTERVAL, lNpAudioVideoInterval.getValue());//缓存"音视频播放间隔"
+                        }
+                        if (AppConfig.getSPUtils().getInt(AppConfig.KEY_DATA_RECEIVE_PORT) != lPortValueParsed) {//"数据接收端口"已更改
+                            AppConfig.getSPUtils().put(AppConfig.KEY_DATA_RECEIVE_PORT, lPortValueParsed);
+                            stopService(lLongRunningUDPServiceIntent);
+                            startService(lLongRunningUDPServiceIntent);
+                        }
+                        RxToast.success("配置已生效!");
                     } else {
-                        RxToast.error("端口范围有误(0~65535),请重新输入!");
-                        configAppParams();
+                        RxToast.error("原端口输入有误(0~65535),请重新输入!");
+                        configApplication();
                     }
                 }).show();
     }
@@ -378,7 +390,7 @@ public class MainActivity extends BaseActivity {
                             mMusicPlayerHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
-                                    mMusicPlayerHandler.postDelayed(this, 30 * 1000);//放在首行,始终向后检查
+                                    mMusicPlayerHandler.postDelayed(this, AppConfig.getSPUtils().getInt(AppConfig.KEY_AUDIO_VIDEO_INTERVAL, AppConfig.DEFAULT_AUDIO_VIDEO_INTERVAL_VALUE) * 1000L);//放在首行,始终向后检查
                                     try {
                                         if (mMusicPathList.isEmpty() || mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//列表无音频,音频 或 视频 正在播放,则终止本次逻辑
                                         mMediaPlayer.reset();
@@ -403,7 +415,7 @@ public class MainActivity extends BaseActivity {
                             mVideoPlayerHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
-                                    mVideoPlayerHandler.postDelayed(this, 30 * 1000);//放在首行,始终向后检查
+                                    mVideoPlayerHandler.postDelayed(this, AppConfig.getSPUtils().getInt(AppConfig.KEY_AUDIO_VIDEO_INTERVAL, AppConfig.DEFAULT_AUDIO_VIDEO_INTERVAL_VALUE) * 1000L);//放在首行,始终向后检查
                                     try {
                                         if (mVideoPathList.isEmpty() || mMediaPlayer.isPlaying() || mVvVideo.isPlaying()) return;//列表无视频,音频 或 视频 正在播放,则终止本次逻辑
                                         if (mVvVideo.getVisibility() == View.GONE) mVvVideo.setVisibility(View.VISIBLE);

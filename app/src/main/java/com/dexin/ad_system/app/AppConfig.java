@@ -28,6 +28,7 @@ public final class AppConfig {
     private static final String TAG = "TAG_AppConfig";
     public static final String UTF_8_CHAR_SET = "UTF-8";
     public static final int DEFAULT_DATA_RECEIVE_PORT = 8080;//默认接收数据端口
+    public static final int DEFAULT_AUDIO_VIDEO_INTERVAL_VALUE = 60;
     public static final int ARRAY_BLOCKING_QUEUE_CAPACITY = 20 * 1000;//阻塞队列容量
     // 21 + 188 * 6 + 311 = 1460
     public static final int UDP_PACKET_HEADER_SIZE = 21;//UDP包头长度
@@ -52,6 +53,7 @@ public final class AppConfig {
     public static final String KEY_FIRST_LAUNCH = "KEY_FIRST_LAUNCH";
     public static final String KEY_DATA_RECEIVE_PORT = "KEY_DATA_RECEIVE_PORT";
     public static final String KEY_FILE_NAME = "KEY_FILE_NAME";
+    public static final String KEY_AUDIO_VIDEO_INTERVAL = "KEY_AUDIO_VIDEO_INTERVAL";//音视频自动检测间隔时间
 
     private static final class LocalBroadcastManagerHolder {
         private static final LocalBroadcastManager LOCAL_BROADCAST_MANAGER = LocalBroadcastManager.getInstance(CustomApplication.getContext());
