@@ -50,10 +50,10 @@ public final class AppConfig {
 
     public static final String ACTION_RECEIVE_CONFIG_TABLE = "ACTION_RECEIVE_CONFIG_TABLE";//收到配置表
     public static final String ACTION_RECEIVE_ELEMENT_TABLE = "ACTION_RECEIVE_ELEMENT_TABLE";//收到元素表
-    public static final String ACTION_RECEIVE_PROPORTION = "ACTION_RECEIVE_PROPORTION";
+    public static final String ACTION_RECEIVE_DATA_INFO = "ACTION_RECEIVE_DATA_INFO";//数据接收信息
     public static final String KEY_FIRST_LAUNCH = "KEY_FIRST_LAUNCH";
     public static final String KEY_DATA_RECEIVE_PORT = "KEY_DATA_RECEIVE_PORT";
-    public static final String KEY_RECEIVE_PROPORTION = "KEY_RECEIVE_PROPORTION";
+    public static final String KEY_DATA_RECEIVE_INFO = "KEY_DATA_RECEIVE_INFO";
     public static final String KEY_FILE_NAME = "KEY_FILE_NAME";
     public static final String KEY_AUDIO_VIDEO_INTERVAL = "KEY_AUDIO_VIDEO_INTERVAL";//音视频自动检测间隔时间
 

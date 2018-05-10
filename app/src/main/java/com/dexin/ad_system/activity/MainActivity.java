@@ -293,7 +293,7 @@ public class MainActivity extends BaseActivity {
         IntentFilter lIntentFilter = new IntentFilter();
         lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);//收到配置表
         lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);//收到元素表
-        lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_PROPORTION);//接收文件比例
+        lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_DATA_INFO);//数据接收信息
         AppConfig.getLocalBroadcastManager().registerReceiver(mDataTableReceiver, lIntentFilter);
     }
 
@@ -436,8 +436,8 @@ public class MainActivity extends BaseActivity {
                             RxToast.warning("收到    新视频");
                         }
                         break;
-                    case AppConfig.ACTION_RECEIVE_PROPORTION:
-                        mTvReceiveInfo.setText(intent.getStringExtra(AppConfig.KEY_RECEIVE_PROPORTION));
+                    case AppConfig.ACTION_RECEIVE_DATA_INFO:
+                        mTvReceiveInfo.setText(intent.getStringExtra(AppConfig.KEY_DATA_RECEIVE_INFO));
                         break;
                     default:
                 }

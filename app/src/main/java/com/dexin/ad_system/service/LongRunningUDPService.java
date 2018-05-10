@@ -306,6 +306,7 @@ public final class LongRunningUDPService extends Service {
      */
     private static final class CusDataConsumerThread extends Thread {
         private static final String TAG = "TAG_CusDataConsumerThread";
+        private static final Intent S_DATA_RECEIVE_INFO_INTENT = new Intent(AppConfig.ACTION_RECEIVE_DATA_INFO);
         private static final HashMap<String, String> FILE_RECEIVE_PROPORTION_MAP = new HashMap<>();
         private volatile boolean isNeedParsePayloadData;
 
@@ -429,13 +430,13 @@ public final class LongRunningUDPService extends Service {
                 }
                 lCopyIndex.AddIndex(1 + 1);//保留位
             }//不用判断 element_count == mCDRElementLongSparseArray.size() ?
+            AppConfig.getLocalBroadcastManager().sendBroadcast(S_DATA_RECEIVE_INFO_INTENT.putExtra(AppConfig.KEY_DATA_RECEIVE_INFO, MessageFormat.format("成功接收到'配置表({0})',接收文件中...", version_number)));//成功接收到'配置表(10)'
             LogUtil.i(TAG, "################################################ 解析配置表成功! ################################################");
         }
 
 
         private static final String[] ELEMENT_FORMAT = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};//.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
         private static final Intent S_ELEMENT_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);
-        private static final Intent S_FILE_RECEIVE_PROPORTION_INTENT = new Intent(AppConfig.ACTION_RECEIVE_PROPORTION);
 
         /**
          * 解析段的数据,并写入文件; 长度已经事先拼接好了,不用再考虑解析完成后剩余内容的拼接问题
@@ -522,7 +523,7 @@ public final class LongRunningUDPService extends Service {
                     for (Map.Entry<String, String> fileReceiveProportionMapEntry : lFileReceiveProportionEntrySet) {
                         lAllFileReceiveProportionInfo.append(fileReceiveProportionMapEntry.getKey()).append("\t\t\t").append(fileReceiveProportionMapEntry.getValue()).append("\n");
                     }
-                    AppConfig.getLocalBroadcastManager().sendBroadcast(S_FILE_RECEIVE_PROPORTION_INTENT.putExtra(AppConfig.KEY_RECEIVE_PROPORTION, lAllFileReceiveProportionInfo.toString()));//发送"数据接收比例"广播
+                    AppConfig.getLocalBroadcastManager().sendBroadcast(S_DATA_RECEIVE_INFO_INTENT.putExtra(AppConfig.KEY_DATA_RECEIVE_INFO, lAllFileReceiveProportionInfo.toString()));//发送"数据接收比例"广播
                 }
                 if (sSectionsNumberList.size() == section_count) {
                     LogUtil.i(TAG, MessageFormat.format("########################################################## 当前文件\t\t{0}\t\t接收完成 ##########################################################", lFile.getName()));

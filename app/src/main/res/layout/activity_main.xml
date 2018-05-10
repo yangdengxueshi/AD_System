@@ -5,7 +5,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:keepScreenOn="true"
-    tools:context="com.dexin.ad_system.activity.MainActivity">
+    tools:context="com.dexin.ad_system.activity.MainActivity"
+    tools:ignore="HardcodedText">
 
     <!--    android:visibility="gone"   -->
     <AdapterViewFlipper
@@ -44,9 +45,9 @@
         android:id="@+id/tv_receive_info"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="1dp"
-        android:textColor="@color/colorAccent"
-        tools:text="230.mp3 56/500"/>
+        android:layout_marginStart="4dp"
+        android:text="等待接收数据..."
+        android:textColor="@color/colorAccent"/>
 
     <View
         android:id="@+id/v_menu"
