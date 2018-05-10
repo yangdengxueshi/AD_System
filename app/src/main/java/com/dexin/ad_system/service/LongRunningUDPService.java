@@ -408,16 +408,20 @@ public final class LongRunningUDPService extends Service {
 
             lCopyIndex.setIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 1 + 1 + 1);
             long lElementGuid;
+            int element_format;
             mCDRElementLongSparseArray.clear();
             for (int i = 0; i < element_count; i++) {
                 lElementGuid = arrayhelpers.GetInt32(configTableBuffer, lCopyIndex);
-                LogUtil.i(TAG, MessageFormat.format("根据配置表中解析出 元素GUID:{0}", lElementGuid));
+                lCopyIndex.AddIndex(1);//类型
+                element_format = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);
                 if (mCDRElementLongSparseArray.indexOfKey(lElementGuid) < 0) {
                     Element lElement = new Element();
                     lElement.setVersionNumber(version_number);
+                    if (element_format < ELEMENT_FORMAT.length) lElement.setFileName(lElementGuid + ELEMENT_FORMAT[element_format]);
                     mCDRElementLongSparseArray.put(lElementGuid, lElement);
+                    LogUtil.i(TAG, MessageFormat.format("根据配置表中解析出 待接收文件:{0}", lElement.getFileName()));
                 }
-                lCopyIndex.AddIndex(1 + 1 + 1 + 1);
+                lCopyIndex.AddIndex(1 + 1);//保留位
             }//不用判断 element_count == mCDRElementLongSparseArray.size() ?
             LogUtil.i(TAG, "################################################ 解析配置表成功! ################################################");
         }
@@ -477,7 +481,7 @@ public final class LongRunningUDPService extends Service {
             int element_type = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
             int element_format = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
             if ((element_format > (ELEMENT_FORMAT.length - 1))) {
-                LogUtil.d(TAG, MessageFormat.format("根据元素表中解析出 元素格式 不是预定义文件数据格式{0}", Arrays.toString(ELEMENT_FORMAT)));
+                LogUtil.e(TAG, MessageFormat.format("根据元素表中解析出 元素格式 不是预定义文件数据格式{0}", Arrays.toString(ELEMENT_FORMAT)));
                 return;
             }
             int section_data_length = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);

@@ -37,7 +37,18 @@
         android:format12Hour="@string/time_format"
         android:format24Hour="@string/time_format"
         android:textColor="@color/white"
-        android:textSize="20sp"/>
+        android:textSize="20sp"
+        tools:text="2018/5/10 15:30:30"/>
+
+    <TextView
+        android:id="@+id/tv_receive_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:textColor="@color/colorAccent"
+        android:textSize="10sp"
+        tools:ignore="SmallSp"
+        tools:text="230.mp3 56/500"/>
 
     <View
         android:id="@+id/v_menu"
