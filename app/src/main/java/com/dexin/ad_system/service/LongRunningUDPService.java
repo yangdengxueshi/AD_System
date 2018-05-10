@@ -29,8 +29,6 @@ import java.io.File;
 import java.io.RandomAccessFile;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.List;
@@ -127,7 +125,6 @@ public final class LongRunningUDPService extends Service {
         private static final String TAG = "TAG_PayloadProducerThread";
         private volatile boolean isNeedReceiveUDP;//是否需要接收UDP数据包（没有启动的时候不需要接收）
         private byte[] mUdpPackContainer;
-        private SocketAddress mSocketAddress;
         private DatagramSocket mDatagramSocket;//单播套接字
         private DatagramPacket mDatagramPacket;//单播数据报
 
@@ -137,12 +134,8 @@ public final class LongRunningUDPService extends Service {
             isNeedReceiveUDP = true;//标志"重新开始接收CDR_Wifi_UDP数据包"
             try {
                 if (mUdpPackContainer == null) mUdpPackContainer = new byte[AppConfig.UDP_PACKET_SIZE];//1460包长
-                if (mDatagramSocket == null) {
-                    mDatagramSocket = new DatagramSocket(null);
-                    mDatagramSocket.setReuseAddress(true);//地址复用
-                    if (mSocketAddress == null) mSocketAddress = new InetSocketAddress(AppConfig.getSPUtils().getInt(AppConfig.KEY_DATA_RECEIVE_PORT, AppConfig.DEFAULT_DATA_RECEIVE_PORT));
-                    mDatagramSocket.bind(mSocketAddress);//绑定端口
-                }
+                mDatagramSocket = new DatagramSocket(AppConfig.getSPUtils().getInt(AppConfig.KEY_DATA_RECEIVE_PORT, AppConfig.DEFAULT_DATA_RECEIVE_PORT));
+//                mDatagramSocket.setReuseAddress(true);
                 if (mDatagramPacket == null) mDatagramPacket = new DatagramPacket(mUdpPackContainer, mUdpPackContainer.length);//建立一个指定缓冲区大小的数据包
                 while (isNeedReceiveUDP) {
                     try {
@@ -170,7 +163,6 @@ public final class LongRunningUDPService extends Service {
                     mDatagramPacket.setLength(0);
                     mDatagramPacket = null;
                 }
-                mSocketAddress = null;
                 mUdpPackContainer = null;//必须置null
             }
         }
