@@ -131,8 +131,8 @@ public final class LongRunningUDPService extends Service {
 
     /**
      * -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-     * ------------------------------------------------------------------------------TODO UDP包生产者线程-----------------------------------------------------------------------------------------
-     * ------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓------------------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------FIXME UDP包生产者线程----------------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------------------
      */
     private static final class UDPPackProducerThread extends Thread {
         private static final String TAG = "TAG_PayloadProducerThread";
@@ -157,7 +157,7 @@ public final class LongRunningUDPService extends Service {
                         mUdpPackContainer = mDatagramPacket.getData();//UDP数据包
                         if ((mUdpPackContainer != null) && (mUdpPackContainer.length > 0)) {
 //                            LogUtil.d(TAG, MessageFormat.format("UDP原始数据包-入队前-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBB:\t\t{0}", stringhelpers.bytesToHexString(mUdpPackContainer).toUpperCase(Locale.getDefault())));
-                            mUDPPackArrayBlockingQueue.offer(mUdpPackContainer);//FIXME 是否应该考虑将过滤净荷的逻辑放于出队时
+                            mUDPPackArrayBlockingQueue.offer(mUdpPackContainer);
                         }
                     } catch (Exception e) {
                         Logger.t(TAG).e(e, "run: ");
@@ -198,8 +198,8 @@ public final class LongRunningUDPService extends Service {
 
     /**
      * -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-     * ------------------------------------------------------------------------------------TODO 净荷消费者线程------------------------------------------------------------------------------------
-     * ------------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓------------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------------FIXME 净荷消费者线程-----------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓-----------------------------------------------------------------------------------
      */
     private static final class PayloadConsumerThread extends Thread {
         private static final String TAG = "TAG_PayloadConsumerThread";
@@ -213,12 +213,12 @@ public final class LongRunningUDPService extends Service {
             isNeedParsePayloadData = true;
             try {
                 while (isNeedParsePayloadData) {
-                    mHead008888Index = AppConfig.indexOfSubBuffer(0, mCurrentCusDataBuffer.length, mCurrentCusDataBuffer, AppConfig.sHead008888Array);//TODO 一、在当前净荷数组中寻找 008888 的下标
+                    mHead008888Index = AppConfig.indexOfSubBuffer(0, mCurrentCusDataBuffer.length, mCurrentCusDataBuffer, AppConfig.sHead008888Array);//FIXME 一、在当前净荷数组中寻找 008888 的下标
                     while (mHead008888Index < 0) {//FIXME （完全可能还是找不到,因为有大量的填充数据"0000000000000000" 和 "FFFFFFFFFFFFFFF"）,所以需要一直向后拼接寻找 008888 ,直到找到（mHead008888Index >= 0）为止
                         mCurrentCusDataBuffer = AppConfig.jointBuffer(mCurrentCusDataBuffer, getNextValidPayload(), AppConfig.sHead008888Array.length - 1);//FIXME 基于上面的原因，长度也不一定是1106
                         mHead008888Index = AppConfig.indexOfSubBuffer(0, mCurrentCusDataBuffer.length, mCurrentCusDataBuffer, AppConfig.sHead008888Array);
-                    }//TODO 经历了循环之后，一定可以在 mCurrentCusDataBuffer 中找到 008888 ,退出循环的时候 mHead008888Index >= 0 一定成立
-                    mCurrentCusDataBuffer = cutOutPayloadArrayAfterHead008888(Arrays.copyOfRange(mCurrentCusDataBuffer, mHead008888Index, mCurrentCusDataBuffer.length));//TODO 传递的是以"008888"头为起始的数组作为参数，返回的是"超出部分的净荷内容"来作为"当前的净荷内容"去继续查找,拼接
+                    }//FIXME 经历了循环之后，一定可以在 mCurrentCusDataBuffer 中找到 008888 ,退出循环的时候 mHead008888Index >= 0 一定成立
+                    mCurrentCusDataBuffer = cutOutPayloadArrayAfterHead008888(Arrays.copyOfRange(mCurrentCusDataBuffer, mHead008888Index, mCurrentCusDataBuffer.length));//FIXME 传递的是以"008888"头为起始的数组作为参数，返回的是"超出部分的净荷内容"来作为"当前的净荷内容"去继续查找,拼接
                 }
             } catch (Exception e) {
                 Logger.t(TAG).e(e, "run: ");
@@ -238,7 +238,7 @@ public final class LongRunningUDPService extends Service {
         }
 
         /**
-         * 获取下一个有效的净荷   TODO 长度不一定是1104，因为6个ts包中的某个包可能不符合要求
+         * 获取下一个有效的净荷   FIXME 长度不一定是1104，因为6个ts包中的某个包可能不符合要求
          *
          * @return 下一个有效的净荷
          */
@@ -266,7 +266,7 @@ public final class LongRunningUDPService extends Service {
          */
         @NonNull
         private static byte[] cutOutPayloadArrayAfterHead008888(@NotNull byte[] currentCusDataArray) {
-            while (true) {//TODO currentCusDataArray 的前1024（长度完全可能小于1024）可能含有文件本身数据 008888(是否可以不用考虑呢?)，1024表示要找到我们一个段长的数据，段的长度就是1024
+            while (true) {//FIXME currentCusDataArray 的前1024（长度完全可能小于1024）可能含有文件本身数据 008888(是否可以不用考虑呢?)，1024表示要找到我们一个段长的数据，段的长度就是1024
                 if (currentCusDataArray.length >= AppConfig.CUS_DATA_SIZE) {
                     try {
                         mCusDataArrayBlockingQueue.offer(Arrays.copyOfRange(currentCusDataArray, 0, AppConfig.CUS_DATA_SIZE));
@@ -275,7 +275,7 @@ public final class LongRunningUDPService extends Service {
                     }
                     return Arrays.copyOfRange(currentCusDataArray, AppConfig.CUS_DATA_SIZE, currentCusDataArray.length);//返回超出 1024 部分的数据
                 } else {//FIXME 拼接之后是否应该检查前 1024 中的 008888
-                    currentCusDataArray = AppConfig.jointBuffer(currentCusDataArray, getNextValidPayload(), currentCusDataArray.length);//TODO 取出包括 00 88 88 之后的所有内容，与下一段净荷 进行拼接 ,截取前1024
+                    currentCusDataArray = AppConfig.jointBuffer(currentCusDataArray, getNextValidPayload(), currentCusDataArray.length);//FIXME 取出包括 00 88 88 之后的所有内容，与下一段净荷 进行拼接 ,截取前1024
                 }
             }
         }
@@ -288,36 +288,36 @@ public final class LongRunningUDPService extends Service {
          */
         @Nullable
         private static byte[] parseUDPPacketToPayload(byte[] udpDataPacket) {
-            if ((udpDataPacket == null) || (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE) || (udpDataPacket[0] != AppConfig.UDP_HEAD_0x86_VALUE)) {//TODO 5.筛选出 广科院0x86头 UDP数据报
+            if ((udpDataPacket == null) || (udpDataPacket.length != AppConfig.UDP_PACKET_SIZE) || (udpDataPacket[0] != AppConfig.UDP_HEAD_0x86_VALUE)) {//FIXME 5.筛选出 广科院0x86头 UDP数据报
                 LogUtil.e(TAG, "UDP原始数据包为 null 或 长度不是1460 或 不是广科院0x86协议头,数据不符合要求进而被丢弃!");
                 return null;
             }
             int lTsPacketAbandonedCount = 0;//被抛弃的ts包的数量
             byte[] lTsPayloadBuffer = new byte[AppConfig.TS_PAYLOAD_NO * AppConfig.TS_PAYLOAD_SIZE];//将用于承载TS净荷的字节数组Buffer 6*184
-            CopyIndex lCopyIndex = new CopyIndex(AppConfig.UDP_PACKET_HEADER_SIZE);//TODO 跳过前21字节头;UDP包以 0x86开头,前21字节是协议头(收到后可以删除),（1460-21-311=1128字节有效）    1128/6=188（每个TS包）-----------------------------------------------------------------------提取为常量必须深度测试
-            byte lTSHead, lTSPid1, lTSPid2;//TODO byte[]     取出当前同步字节，看是否等于0x 47 0F FE xx
-            for (int i = 0; i < AppConfig.TS_PAYLOAD_NO; i++) {//TODO 循环解析一个UDP包中的6个TS包
+            CopyIndex lCopyIndex = new CopyIndex(AppConfig.UDP_PACKET_HEADER_SIZE);//FIXME 跳过前21字节头;UDP包以 0x86开头,前21字节是协议头(收到后可以删除),（1460-21-311=1128字节有效）    1128/6=188（每个TS包）-----------------------------------------------------------------------提取为常量必须深度测试
+            byte lTSHead, lTSPid1, lTSPid2;//FIXME byte[]     取出当前同步字节，看是否等于0x 47 0F FE xx
+            for (int i = 0; i < AppConfig.TS_PAYLOAD_NO; i++) {//FIXME 循环解析一个UDP包中的6个TS包
                 lTSHead = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
                 lTSPid1 = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
                 lTSPid2 = arrayhelpers.GetInt8(udpDataPacket, lCopyIndex);
                 lCopyIndex.AddIndex(1);//前面已经 +1 +1 +1,现在 +1,跳过每个TS包的0x47前4个字节的协议头
                 if ((lTSHead != AppConfig.TS_HEAD_0x47_VALUE) || ((lTSPid1 & (byte) 0x1F) != (byte) 0x0F) || (lTSPid2 != (byte) 0xFE)) {//三个条件有一个不满足都要将当前ts包抛掉(即不满足TS包协议头)
-                    lCopyIndex.AddIndex(AppConfig.TS_PAYLOAD_SIZE);//TODO TS包以  0x47开头，前4个字节是协议头(0x47 xF FE xx)，其后是184字节净荷     4+184=188
+                    lCopyIndex.AddIndex(AppConfig.TS_PAYLOAD_SIZE);//FIXME TS包以  0x47开头，前4个字节是协议头(0x47 xF FE xx)，其后是184字节净荷     4+184=188
                     lTsPacketAbandonedCount++;
                     continue;
                 }
                 System.arraycopy(arrayhelpers.GetBytes(udpDataPacket, AppConfig.TS_PAYLOAD_SIZE, lCopyIndex), 0, lTsPayloadBuffer, (i - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE, AppConfig.TS_PAYLOAD_SIZE);
             }
 //            LogUtil.d(TAG, "一个UDP包中全部有效净荷拼接结果:" + stringhelpers.bytesToHexString(Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE)));
-            return Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE);//TODO 返回每个UDP包中n个有效TS包中的净荷拼接起来的字节数组
+            return Arrays.copyOf(lTsPayloadBuffer, (AppConfig.TS_PAYLOAD_NO - lTsPacketAbandonedCount) * AppConfig.TS_PAYLOAD_SIZE);//FIXME 返回每个UDP包中n个有效TS包中的净荷拼接起来的字节数组
         }
     }
 
 
     /**
      * -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-     * ------------------------------------------------------------------------------TODO "自定义数据消费者"线程-----------------------------------------------------------------------------------
-     * ------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓-----------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------FIXME "自定义数据消费者"线程----------------------------------------------------------------------------------
+     * ------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------------
      */
     private static final class CusDataConsumerThread extends Thread {
         private static final String TAG = "TAG_CusDataConsumerThread";
@@ -364,10 +364,10 @@ public final class LongRunningUDPService extends Service {
         private static void parseCustomDataWithHead008888(@NotNull byte[] front1024OfCurrentPayloadArray) {
 //            LogUtil.d(TAG, "自定义协议数据AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t" + stringhelpers.bytesToHexString(front1024OfCurrentPayloadArray).toUpperCase());
             switch (front1024OfCurrentPayloadArray[AppConfig.TABLE_DISCRIMINATOR_INDEX]) {
-                case AppConfig.CONFIG_TABLE_DISCRIMINATOR://TODO 获得配置表,开始解析配置表  front1024OfCurrentPayloadArray 一定是00 88 88 xx 87开头
+                case AppConfig.CONFIG_TABLE_DISCRIMINATOR://FIXME 获得配置表,开始解析配置表  front1024OfCurrentPayloadArray 一定是00 88 88 xx 87开头
                     parseConfigTable(front1024OfCurrentPayloadArray);
                     break;
-                case AppConfig.ELEMENT_TABLE_DISCRIMINATOR://TODO 获得元素表,开始解析元素表 front1024OfCurrentPayloadArray 一定是00 88 88 xx 86开头
+                case AppConfig.ELEMENT_TABLE_DISCRIMINATOR://FIXME 获得元素表,开始解析元素表 front1024OfCurrentPayloadArray 一定是00 88 88 xx 86开头
                     parseSectionData(front1024OfCurrentPayloadArray);
                     break;
                 default:
@@ -376,7 +376,7 @@ public final class LongRunningUDPService extends Service {
 
 
         private static int sVersionNumberInConfigTable = -1;//接收到的配置表中解析出的 版本号
-        private static final LongSparseArray<Element> mCDRElementLongSparseArray = new LongSparseArray<>();       //TODO 存放 GUID 和 元素项
+        private static final LongSparseArray<Element> mCDRElementLongSparseArray = new LongSparseArray<>();       //FIXME 存放 GUID 和 元素项
 
         private static final Intent S_CONFIG_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);
 
@@ -501,7 +501,8 @@ public final class LongRunningUDPService extends Service {
                 LogUtil.e(TAG, "在映射表的Key中找不到 通过当前元素段解析出的元素GUID,退出元素段的解析工作!");
                 return;
             }
-            int element_type = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
+//            int element_type = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
+            lCopyIndex.AddIndex(1);//跳过 element_type 元素类型
             int element_format = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
             if ((element_format > (ELEMENT_FORMAT.length - 1))) {
                 LogUtil.e(TAG, MessageFormat.format("根据元素表中解析出 元素格式 不是预定义文件数据格式{0}", Arrays.toString(ELEMENT_FORMAT)));

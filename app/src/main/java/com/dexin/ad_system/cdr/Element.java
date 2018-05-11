@@ -8,7 +8,7 @@ import java.util.List;
  */
 public class Element {
     private int mVersionNumber = -1;//元素 版本号
-    private String fileName;//元素 格式
+    private String mFileName;//元素 格式
     private final List<Integer> mSectionsNumberList = new ArrayList<>();//存放段号的集合(最多65536个段)
 
     public int getVersionNumber() {
@@ -20,11 +20,11 @@ public class Element {
     }
 
     public String getFileName() {
-        return fileName;
+        return mFileName;
     }
 
     public void setFileName(String fileName) {
-        this.fileName = fileName;
+        mFileName = fileName;
     }
 
     public List<Integer> getSectionsNumberList() {
