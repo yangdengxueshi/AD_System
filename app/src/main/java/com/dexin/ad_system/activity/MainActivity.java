@@ -48,8 +48,9 @@ public class MainActivity extends BaseActivity {
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
+        registerForContextMenuInOnCreate();
         initMarqueeTextViewInOnCreate();
-        initMediaPlayerInOnCreate();
+        initMusicPlayerResourceInOnCreate();
         initVideoResourceInOnCreate();
         initDataTableReceiverResourceInOnCreate();
         startDataReceiveServiceInOnCreate();
@@ -60,7 +61,6 @@ public class MainActivity extends BaseActivity {
         super.onResume();
         startLanternSlideInOnResume();
         startMarqueeTextViewInOnResume();
-        registerForContextMenuInOnResume();
     }
 
     @Override
@@ -68,12 +68,12 @@ public class MainActivity extends BaseActivity {
         stopLanternSlideInOnPause();
         stopMarqueeTextViewInOnPause();
         releaseVideoResourceInOnPause();
-        unregisterForContextMenuInOnPause();
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
+        unregisterForContextMenuInOnDestroy();
         stopDataReceiveService();
         releaseMarqueeTextViewResourceInOnDestroy();
         releaseMusicPlayerResourceInOnDestroy();
@@ -94,6 +94,7 @@ public class MainActivity extends BaseActivity {
 
     private void startDataReceiveService() {
         stopService(lLongRunningUDPServiceIntent);
+        //TODO --------------------------------------------------------------------------------------------- Ping 服务器 并执行后续逻辑---------------------------------------------------------------------------------------------
         startService(lLongRunningUDPServiceIntent);
     }
 
@@ -101,6 +102,20 @@ public class MainActivity extends BaseActivity {
         stopService(lLongRunningUDPServiceIntent);
     }
 
+    /**
+     * 启动"数据接收服务"
+     */
+    private void startDataReceiveServiceInOnCreate() {
+        if (!RxNetTool.isWifiConnected(CustomApplication.getContext())) {
+            RxToast.warning(AppConfig.TIP_CONNECT_TO_WIFI);
+        } else {
+            if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_CONFIG, true)) {
+                configApplication();
+            } else {
+                startDataReceiveService();
+            }
+        }
+    }
 
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME 返回键被点击--------------------------------------------------------------------------------------
@@ -125,11 +140,11 @@ public class MainActivity extends BaseActivity {
     @BindView(R.id.v_menu)
     View mVMenu;
 
-    private void registerForContextMenuInOnResume() {
+    private void registerForContextMenuInOnCreate() {
         registerForContextMenu(mVMenu);
     }
 
-    private void unregisterForContextMenuInOnPause() {
+    private void unregisterForContextMenuInOnDestroy() {
         unregisterForContextMenu(mVMenu);
     }
 
@@ -165,21 +180,6 @@ public class MainActivity extends BaseActivity {
                 break;
         }
         return super.onContextItemSelected(item);
-    }
-
-    /**
-     * 启动"数据接收服务"
-     */
-    private void startDataReceiveServiceInOnCreate() {
-        if (!RxNetTool.isWifiConnected(CustomApplication.getContext())) {
-            RxToast.warning(AppConfig.TIP_CONNECT_TO_WIFI);
-        } else {
-            if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_CONFIG, true)) {
-                configApplication();
-            } else {//TODO --------------------------------------------------------------------------------------------- Ping服务器并执行后续逻辑----------------------------------------------------------------------------------
-                startDataReceiveService();
-            }
-        }
     }
 
     /**
@@ -263,7 +263,7 @@ public class MainActivity extends BaseActivity {
     private static final Handler mMusicPlayerHandler = new Handler();
     private final MediaPlayer mMediaPlayer = new MediaPlayer();//音乐播放器
 
-    private void initMediaPlayerInOnCreate() {
+    private void initMusicPlayerResourceInOnCreate() {
         mMediaPlayer.setOnPreparedListener(mediaPlayer -> {
             RxToast.info("开始播放 音频!");
             {//释放视频
@@ -394,14 +394,7 @@ public class MainActivity extends BaseActivity {
                             break;
                         }
 
-                        if (mFilePath.endsWith(".png") || mFilePath.endsWith(".bmp") || mFilePath.endsWith(".jpg") || mFilePath.endsWith(".gif")) {     //①播放幻灯片
-                            if (mAvfLanternSlideView.getVisibility() == View.GONE) mAvfLanternSlideView.setVisibility(View.VISIBLE);
-                            mImagePathList.add(0, mFilePath);
-                            if (mImagePathList.isEmpty()) break;
-                            mLanternSlideAdapter.notifyDataSetChanged();
-                            if (!mAvfLanternSlideView.isFlipping()) mAvfLanternSlideView.startFlipping();
-                            RxToast.warning("收到    新图片");
-                        } else if (mFilePath.endsWith(".txt")) {                                                                                        //②播放文字
+                        if (mFilePath.endsWith(".txt")) {                                                                                                       //①播放文字
                             mTvvmTxt.stopFlipping();//始终先释放资源
                             mTvvmTxt.removeAllViews();
                             if (mTvvmTxt.getVisibility() == View.GONE) mTvvmTxt.setVisibility(View.VISIBLE);
@@ -418,7 +411,14 @@ public class MainActivity extends BaseActivity {
                             mTvvmTxt.setViews(lViewList);
                             if (lViewList.size() <= 1) mTvvmTxt.stopFlipping();
                             RxToast.warning("收到    新文本");
-                        } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                          //③播放音频
+                        } else if (mFilePath.endsWith(".png") || mFilePath.endsWith(".bmp") || mFilePath.endsWith(".jpg") || mFilePath.endsWith(".gif")) {      //②播放幻灯片
+                            if (mAvfLanternSlideView.getVisibility() == View.GONE) mAvfLanternSlideView.setVisibility(View.VISIBLE);
+                            mImagePathList.add(0, mFilePath);
+                            if (mImagePathList.isEmpty()) break;
+                            mLanternSlideAdapter.notifyDataSetChanged();
+                            if (!mAvfLanternSlideView.isFlipping()) mAvfLanternSlideView.startFlipping();
+                            RxToast.warning("收到    新图片");
+                        } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                                  //③播放音频
                             if (!mMusicPathList.isEmpty()) mNextMusicIndex = mNextMusicIndex % mMusicPathList.size();
                             mMusicPathList.add(mNextMusicIndex, mFilePath);//加入 新的音频文件 到当前正在播放的音频位置
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
@@ -443,7 +443,7 @@ public class MainActivity extends BaseActivity {
                             });
                             RxToast.warning("收到    新音频");
                         } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb")
-                                || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {                                                          //④播放视频
+                                || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {                                                                  //④播放视频
                             if (!mVideoPathList.isEmpty()) mNextVideoIndex = mNextVideoIndex % mVideoPathList.size();
                             mVideoPathList.add(mNextVideoIndex, mFilePath);//加入 新的视频文件 到当前正在播放的视频位置
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
