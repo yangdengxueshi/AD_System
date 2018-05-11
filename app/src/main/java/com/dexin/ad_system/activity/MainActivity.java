@@ -165,10 +165,10 @@ public class MainActivity extends BaseActivity {
     @Override
     public boolean onContextItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.local_wifi_net_set:       //FIXME 本地Wifi网络设置
+            case R.id.local_wifi_net_set:
                 startActivity(WIFI_SETTINGS_INTENT);
                 break;
-            case R.id.app_set:                  //FIXME 应用程序配置
+            case R.id.app_set:
                 configApplication();
                 break;
             case R.id.data_receive_set:
@@ -315,31 +315,31 @@ public class MainActivity extends BaseActivity {
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME 数据表广播接收器----------------------------------------------------------------------------------
     //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----------------------------------------------------------------------------------
-    private DataTableReceiver mDataTableReceiver;//FIXME 数据表接收器广播
+    private DataReceiver mDataReceiver;//FIXME 数据接收器
 
     /**
      * 初始化 数据表接收器广播 资源
      */
     private void initDataTableReceiverResourceInOnCreate() {
-        mDataTableReceiver = new DataTableReceiver();
+        mDataReceiver = new DataReceiver();
         IntentFilter lIntentFilter = new IntentFilter();
         lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_CONFIG_TABLE);//收到配置表
         lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);//收到元素表
         lIntentFilter.addAction(AppConfig.ACTION_RECEIVE_DATA_INFO);//数据接收信息
-        AppConfig.getLocalBroadcastManager().registerReceiver(mDataTableReceiver, lIntentFilter);
+        AppConfig.getLocalBroadcastManager().registerReceiver(mDataReceiver, lIntentFilter);
     }
 
     /**
      * 释放 数据表接收器广播 资源
      */
     private void releaseDataTableResourceInOnDestroy() {
-        AppConfig.getLocalBroadcastManager().unregisterReceiver(mDataTableReceiver);
+        AppConfig.getLocalBroadcastManager().unregisterReceiver(mDataReceiver);
     }
 
     /**
      * FIXME 数据表接收器
      */
-    private final class DataTableReceiver extends BroadcastReceiver {
+    private final class DataReceiver extends BroadcastReceiver {
         private static final String TAG = "TAG_DataTableReceiver";
         private String mFilePath;
         private final List<String> mFilePathList = new ArrayList<>(); //"文件路径"列表
@@ -410,14 +410,14 @@ public class MainActivity extends BaseActivity {
                             }
                             mTvvmTxt.setViews(lViewList);
                             if (lViewList.size() <= 1) mTvvmTxt.stopFlipping();
-                            RxToast.warning("收到    新文本");
+                            RxToast.info("收到    新文本");
                         } else if (mFilePath.endsWith(".png") || mFilePath.endsWith(".bmp") || mFilePath.endsWith(".jpg") || mFilePath.endsWith(".gif")) {      //②播放幻灯片
                             if (mAvfLanternSlideView.getVisibility() == View.GONE) mAvfLanternSlideView.setVisibility(View.VISIBLE);
                             mImagePathList.add(0, mFilePath);
                             if (mImagePathList.isEmpty()) break;
                             mLanternSlideAdapter.notifyDataSetChanged();
                             if (!mAvfLanternSlideView.isFlipping()) mAvfLanternSlideView.startFlipping();
-                            RxToast.warning("收到    新图片");
+                            RxToast.info("收到    新图片");
                         } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                                  //③播放音频
                             if (!mMusicPathList.isEmpty()) mNextMusicIndex = mNextMusicIndex % mMusicPathList.size();
                             mMusicPathList.add(mNextMusicIndex, mFilePath);//加入 新的音频文件 到当前正在播放的音频位置
@@ -441,7 +441,7 @@ public class MainActivity extends BaseActivity {
                                     }
                                 }
                             });
-                            RxToast.warning("收到    新音频");
+                            RxToast.info("收到    新音频");
                         } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb")
                                 || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {                                                                  //④播放视频
                             if (!mVideoPathList.isEmpty()) mNextVideoIndex = mNextVideoIndex % mVideoPathList.size();
@@ -465,7 +465,7 @@ public class MainActivity extends BaseActivity {
                                     }
                                 }
                             });
-                            RxToast.warning("收到    新视频");
+                            RxToast.info("收到    新视频");
                         }
                         break;
                     case AppConfig.ACTION_RECEIVE_DATA_INFO:

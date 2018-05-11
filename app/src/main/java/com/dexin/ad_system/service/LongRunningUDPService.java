@@ -143,7 +143,7 @@ public final class LongRunningUDPService extends Service {
 
         @Override
         public void run() {
-            LogUtil.e(TAG, "################################################ 开始接收CDR_Wifi_UDP数据包 ##################################################");
+            LogUtil.i(TAG, "################################################ 开始接收CDR_Wifi_UDP数据包 ##################################################");
             isNeedReceiveUDP = true;//标志"重新开始接收CDR_Wifi_UDP数据包"
             try {
                 if (mUdpPackContainer == null) mUdpPackContainer = new byte[AppConfig.UDP_PACKET_SIZE];//1460包长
@@ -209,7 +209,7 @@ public final class LongRunningUDPService extends Service {
 
         @Override
         public void run() {
-            LogUtil.e(TAG, "################################################ 开始解析净荷数据 ################################################");
+            LogUtil.i(TAG, "################################################ 开始解析净荷数据 ################################################");
             isNeedParsePayloadData = true;
             try {
                 while (isNeedParsePayloadData) {
@@ -327,7 +327,7 @@ public final class LongRunningUDPService extends Service {
 
         @Override
         public void run() {
-            LogUtil.e(TAG, "################################################ 开始解析自定义协议数据 ##################################################");
+            LogUtil.i(TAG, "################################################ 开始解析自定义协议数据 ##################################################");
             isNeedParsePayloadData = true;
             while (isNeedParsePayloadData) {
                 try {
@@ -386,7 +386,7 @@ public final class LongRunningUDPService extends Service {
          * @param configTableBuffer 已经拼接好的配置表Buffer（008888xx87 开头,1024长度）
          */
         private static void parseConfigTable(byte[] configTableBuffer) {
-            LogUtil.e(TAG, "收到配置表数据段,开始解析====>");
+            LogUtil.i(TAG, "收到配置表数据段,开始解析====>");
 //            LogUtil.d(TAG, MessageFormat.format("配置表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(configTableBuffer).toUpperCase(Locale.getDefault())));
             CopyIndex lCopyIndex = new CopyIndex(AppConfig.TABLE_DISCRIMINATOR_INDEX + 1);//下标先偏移到 87位置 之后,再开始做解析工作
             int version_number = arrayhelpers.GetInt8(configTableBuffer, lCopyIndex);          //2.配置表：“版本号”
@@ -488,7 +488,7 @@ public final class LongRunningUDPService extends Service {
             List<Integer> sSectionsNumberList;//FIXME 用于存放当前数据段所对应元素的"所有段号"
             if (lElement != null) {
                 if (version_number != lElement.getVersionNumber()) {
-                    LogUtil.d(TAG, "根据元素表中解析出 版本号与元素版本号不一致,退出元素段解析工作.");
+                    LogUtil.e(TAG, "根据元素表中解析出 版本号与元素版本号不一致,退出元素段解析工作.");
                     return;
                 } else {
                     sSectionsNumberList = lElement.getSectionsNumberList();//------期望逻辑------
@@ -498,7 +498,7 @@ public final class LongRunningUDPService extends Service {
                     }
                 }
             } else {
-                LogUtil.d(TAG, "在映射表的Key中找不到 通过当前元素段解析出的元素GUID,退出元素段的解析工作!");
+                LogUtil.e(TAG, "在映射表的Key中找不到 通过当前元素段解析出的元素GUID,退出元素段的解析工作!");
                 return;
             }
             int element_type = arrayhelpers.GetInt8(sectionBuffer, lCopyIndex);
@@ -509,7 +509,7 @@ public final class LongRunningUDPService extends Service {
             }
             int section_data_length = arrayhelpers.GetInt32(sectionBuffer, lCopyIndex);
             if ((section_data_length <= 0) || (section_data_length > (AppConfig.CUS_DATA_SIZE - (AppConfig.TABLE_DISCRIMINATOR_INDEX + 1 + 1 + 2 + 2 + 2 + 4 + 1 + 1 + 4 + 4)))) {//有效文件数据只有 998 字节
-                LogUtil.d(TAG, "根据元素表中解析出 其中有效文件数据大小不符合(0,998]字节要求,退出元素表解析操作!");
+                LogUtil.e(TAG, "根据元素表中解析出 其中有效文件数据大小不符合(0,998]字节要求,退出元素表解析操作!");
                 return;
             }
             //校验CRC
