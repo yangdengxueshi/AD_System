@@ -66,5 +66,10 @@
             android:exported="true"
             android:permission="custom.permission.LongRunningUDPService">
         </service>
+        <service
+            android:name=".service.CDRService"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="custom.permission.LongRunningUDPService"/>
     </application>
 </manifest>

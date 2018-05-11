@@ -60,6 +60,22 @@ public final class AppConfig {
 
     public static final String TIP_CONNECT_TO_WIFI = "请先连接并正确配置'CDR WiFi'";
 
+
+    //--------------------------------------------------------------------------------------------------------------------------------------------------------
+    //---------------------------------------------------------------------TODO CDRService--------------------------------------------------------------------
+    //---------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓--------------------------------------------------------------------
+    public static final String ACTION_SHOW_PING_DIALOG = "ACTION_SHOW_PING_DIALOG";
+    public static final String ACTION_CANCEL_PING_DIALOG = "ACTION_CANCEL_PING_DIALOG";
+    public static final String ACTION_SEND_CONFIG_PARAM = "ACTION_SEND_CONFIG_PARAM";
+    public static final String KEY_PING_STATUS = "KEY_PING_STATUS";
+    public static final String ACTION_SHOW_RECEIVED_PARAM = "ACTION_SHOW_RECEIVED_PARAM";
+    public static final String KEY_RECEIVED_DATA = "KEY_RECEIVED_DATA";
+    public static final String ACTION_CONNECT_TO_CDR_SERVER = "ACTION_CONNECT_TO_CDR_SERVER";
+    public static final String KEY_CONFIG_PARAM = "KEY_CONFIG_PARAM";
+    public static final String mHost = "192.168.8.108";
+    public static final int mPort = 30000;
+
+
     private static final class LocalBroadcastManagerHolder {
         private static final LocalBroadcastManager LOCAL_BROADCAST_MANAGER = LocalBroadcastManager.getInstance(CustomApplication.getContext());
     }
