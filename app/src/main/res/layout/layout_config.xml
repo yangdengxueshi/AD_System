@@ -37,7 +37,8 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="音视频间隔(s):"
+            android:gravity="center"
+            android:text="音视频间隔(s):\n[30~300]"
             android:textColor="@color/black"
             android:textSize="18sp"/>
 
@@ -46,6 +47,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
+            android:descendantFocusability="blocksDescendants"
             android:focusable="true"
             android:focusableInTouchMode="true"/>
     </LinearLayout>

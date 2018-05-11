@@ -21,6 +21,7 @@ import com.dexin.utilities.CopyIndex;
 import com.dexin.utilities.arrayhelpers;
 import com.dexin.utilities.stringhelpers;
 import com.orhanobut.logger.Logger;
+import com.vondear.rxtools.RxAppTool;
 import com.vondear.rxtools.view.RxToast;
 
 import org.jetbrains.annotations.Contract;
@@ -67,6 +68,8 @@ public final class LongRunningUDPService extends Service {
         if (mUDPPackProducerThread == null) mUDPPackProducerThread = new UDPPackProducerThread();
         if (mPayloadConsumerThread == null) mPayloadConsumerThread = new PayloadConsumerThread();
         if (mCusDataConsumerThread == null) mCusDataConsumerThread = new CusDataConsumerThread();
+
+        LogUtil.d("AAAAAAAAAAAAAAAAAA", "后台:" + RxAppTool.isAppBackground(CustomApplication.getContext()) + "\t\t前台" + RxAppTool.isAppForeground(CustomApplication.getContext()));
     }
 
     @Override
@@ -321,7 +324,7 @@ public final class LongRunningUDPService extends Service {
      */
     private static final class CusDataConsumerThread extends Thread {
         private static final String TAG = "TAG_CusDataConsumerThread";
-        private static final Intent S_DATA_RECEIVE_INFO_INTENT = new Intent(AppConfig.ACTION_RECEIVE_DATA_INFO);
+        private static final Intent S_DATA_RECEIVE_INFO_INTENT = new Intent(AppConfig.ACTION_RECEIVE_DATA_INFO);//FIXME 发送的文本中必须含有 一个 "& "
         private static final HashMap<String, String> FILE_RECEIVE_PROPORTION_MAP = new HashMap<>();
         private volatile boolean isNeedParsePayloadData;
 
@@ -445,12 +448,12 @@ public final class LongRunningUDPService extends Service {
                 }
                 lCopyIndex.AddIndex(1 + 1);//保留位
             }//不用判断 element_count == mCDRElementLongSparseArray.size() ?
-            AppConfig.getLocalBroadcastManager().sendBroadcast(S_DATA_RECEIVE_INFO_INTENT.putExtra(AppConfig.KEY_DATA_RECEIVE_INFO, MessageFormat.format("成功接收到'配置表({0})',接收文件中...", version_number)));//成功接收到'配置表(10)'
+            AppConfig.getLocalBroadcastManager().sendBroadcast(S_DATA_RECEIVE_INFO_INTENT.putExtra(AppConfig.KEY_DATA_RECEIVE_INFO, MessageFormat.format("成功接收到'配置表({0})',接收文件中...& ", version_number)));//成功接收到'配置表(10)'
             LogUtil.i(TAG, "################################################ 解析配置表成功! ################################################");
         }
 
 
-        private static final String[] ELEMENT_FORMAT = {".txt", ".png", ".bmp", ".jpg", ".gif", ".avi", ".mp3", ".mp4"};//.3gp  .wav    .mkv    .mov    .mpeg   .flv       //本地广播
+        private static final String[] ELEMENT_FORMAT = {".TXT", ".PNG", ".BMP", ".JPG", ".GIF", ".AVI", ".MP3", ".MP4"};//.3GP  .WAV    .MKV    .MOV    .MPEG   .FLV       //本地广播
         private static final Intent S_ELEMENT_TABLE_INTENT = new Intent(AppConfig.ACTION_RECEIVE_ELEMENT_TABLE);
 
         /**
@@ -462,6 +465,7 @@ public final class LongRunningUDPService extends Service {
 //            LogUtil.d(TAG, MessageFormat.format("元素表AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA:\t\t{0}", stringhelpers.bytesToHexString(sectionBuffer).toUpperCase(Locale.getDefault())));
             if (mCDRElementLongSparseArray.size() <= 0) {
                 LogUtil.d(TAG, "接收到元素表数据段,但程序启动后还未成功解析过配置表,直接将当前数据段丢弃.");
+                AppConfig.getLocalBroadcastManager().sendBroadcast(S_DATA_RECEIVE_INFO_INTENT.putExtra(AppConfig.KEY_DATA_RECEIVE_INFO, "收到数据段,未收到配置信息!& "));//发送"数据接收比例"广播
                 return;
             }
 
@@ -537,7 +541,11 @@ public final class LongRunningUDPService extends Service {
                     StringBuilder lAllFileReceiveProportionInfo = new StringBuilder();
                     Set<Map.Entry<String, String>> lFileReceiveProportionEntrySet = FILE_RECEIVE_PROPORTION_MAP.entrySet();
                     for (Map.Entry<String, String> fileReceiveProportionMapEntry : lFileReceiveProportionEntrySet) {
-                        lAllFileReceiveProportionInfo.append(fileReceiveProportionMapEntry.getKey()).append("\t\t\t").append(fileReceiveProportionMapEntry.getValue()).append("\n");
+                        lAllFileReceiveProportionInfo.append(fileReceiveProportionMapEntry.getKey()).append("\n");
+                    }
+                    lAllFileReceiveProportionInfo.append("&");
+                    for (Map.Entry<String, String> fileReceiveProportionMapEntry : lFileReceiveProportionEntrySet) {
+                        lAllFileReceiveProportionInfo.append(fileReceiveProportionMapEntry.getValue()).append("\n");
                     }
                     AppConfig.getLocalBroadcastManager().sendBroadcast(S_DATA_RECEIVE_INFO_INTENT.putExtra(AppConfig.KEY_DATA_RECEIVE_INFO, lAllFileReceiveProportionInfo.toString()));//发送"数据接收比例"广播
                 }

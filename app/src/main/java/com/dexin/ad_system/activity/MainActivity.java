@@ -197,7 +197,10 @@ public class MainActivity extends BaseActivity {
         new AlertDialog.Builder(MainActivity.this).setCancelable(false).setIcon(R.drawable.icon_settings).setTitle(R.string.app_config).setView(lConfigLayout)
                 .setPositiveButton("确定", (dialog, which) -> {
                     int lPortValueParsed = (TextUtils.isEmpty(lEtPort.getText().toString())) ? -1 : Integer.valueOf(lEtPort.getText().toString());
-                    if ((0 <= lPortValueParsed) && (lPortValueParsed <= 65535)) {
+                    if (lPortValueParsed < 1024) {
+                        RxToast.error("1024内是系统保留端口,请重新输入!\n(1024~65535)");
+                        configApplication();
+                    } else if (lPortValueParsed <= 65535) {
                         if (AppConfig.getSPUtils().getBoolean(AppConfig.KEY_FIRST_CONFIG, true)) {
                             AppConfig.getSPUtils().put(AppConfig.KEY_FIRST_CONFIG, false);//缓存"程序从此不再是第一次启动"了
                         }
@@ -212,9 +215,6 @@ public class MainActivity extends BaseActivity {
                             startDataReceiveService();
                         }
                         RxToast.info(configChanged ? "新配置已生效!" : "您未对配置作出修改!");
-                    } else {
-                        RxToast.error("原端口输入有误(0~65535),请重新输入!");
-                        configApplication();
                     }
                 }).show();
     }
@@ -308,9 +308,10 @@ public class MainActivity extends BaseActivity {
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME 接收信息显示--------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓--------------------------------------------------------------------------------------
-    @BindView(R.id.tv_receive_info)
-    TextView mTvReceiveInfo;
-
+    @BindView(R.id.tv_file_name_info)
+    TextView mTvFileNameInfo;
+    @BindView(R.id.tv_file_receive_info)
+    TextView mTvFileReceiveInfo;
 
     //------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
     //------------------------------------------------------------------------------FIXME 数据表广播接收器----------------------------------------------------------------------------------
@@ -394,7 +395,7 @@ public class MainActivity extends BaseActivity {
                             break;
                         }
 
-                        if (mFilePath.endsWith(".txt")) {                                                                                                       //①播放文字
+                        if (mFilePath.endsWith(".TXT")) {                                                                                                       //①播放文字
                             mTvvmTxt.stopFlipping();//始终先释放资源
                             mTvvmTxt.removeAllViews();
                             if (mTvvmTxt.getVisibility() == View.GONE) mTvvmTxt.setVisibility(View.VISIBLE);
@@ -411,14 +412,14 @@ public class MainActivity extends BaseActivity {
                             mTvvmTxt.setViews(lViewList);
                             if (lViewList.size() <= 1) mTvvmTxt.stopFlipping();
                             RxToast.info("收到    新文本");
-                        } else if (mFilePath.endsWith(".png") || mFilePath.endsWith(".bmp") || mFilePath.endsWith(".jpg") || mFilePath.endsWith(".gif")) {      //②播放幻灯片
+                        } else if (mFilePath.endsWith(".PNG") || mFilePath.endsWith(".BMP") || mFilePath.endsWith(".JPG") || mFilePath.endsWith(".GIF")) {      //②播放幻灯片
                             if (mAvfLanternSlideView.getVisibility() == View.GONE) mAvfLanternSlideView.setVisibility(View.VISIBLE);
                             mImagePathList.add(0, mFilePath);
                             if (mImagePathList.isEmpty()) break;
                             mLanternSlideAdapter.notifyDataSetChanged();
                             if (!mAvfLanternSlideView.isFlipping()) mAvfLanternSlideView.startFlipping();
                             RxToast.info("收到    新图片");
-                        } else if (mFilePath.endsWith(".mp3") || mFilePath.endsWith(".wav")) {                                                                  //③播放音频
+                        } else if (mFilePath.endsWith(".MP3") || mFilePath.endsWith(".WAV")) {                                                                  //③播放音频
                             if (!mMusicPathList.isEmpty()) mNextMusicIndex = mNextMusicIndex % mMusicPathList.size();
                             mMusicPathList.add(mNextMusicIndex, mFilePath);//加入 新的音频文件 到当前正在播放的音频位置
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
@@ -442,8 +443,8 @@ public class MainActivity extends BaseActivity {
                                 }
                             });
                             RxToast.info("收到    新音频");
-                        } else if (mFilePath.endsWith(".avi") || mFilePath.endsWith(".mp4") || mFilePath.endsWith(".rmvb")
-                                || mFilePath.endsWith(".wmv") || mFilePath.endsWith(".3gp")) {                                                                  //④播放视频
+                        } else if (mFilePath.endsWith(".AVI") || mFilePath.endsWith(".MP4") || mFilePath.endsWith(".RMVB")
+                                || mFilePath.endsWith(".WMV") || mFilePath.endsWith(".3GP")) {                                                                  //④播放视频
                             if (!mVideoPathList.isEmpty()) mNextVideoIndex = mNextVideoIndex % mVideoPathList.size();
                             mVideoPathList.add(mNextVideoIndex, mFilePath);//加入 新的视频文件 到当前正在播放的视频位置
                             {//重置 MediaPlayer 和 VideoView 之后,isPlaying == false
@@ -469,7 +470,15 @@ public class MainActivity extends BaseActivity {
                         }
                         break;
                     case AppConfig.ACTION_RECEIVE_DATA_INFO:
-                        mTvReceiveInfo.setText(intent.getStringExtra(AppConfig.KEY_DATA_RECEIVE_INFO));
+                        String[] newReceiveDataInfo = intent.getStringExtra(AppConfig.KEY_DATA_RECEIVE_INFO).split("&");
+                        if (newReceiveDataInfo.length == 2) {
+                            if (!Objects.equals(newReceiveDataInfo[0], mTvFileNameInfo.getText().toString())) {
+                                mTvFileNameInfo.setText(newReceiveDataInfo[0]);
+                            }
+                            if (!Objects.equals(newReceiveDataInfo[1], mTvFileReceiveInfo.getText().toString())) {
+                                mTvFileReceiveInfo.setText(newReceiveDataInfo[1]);
+                            }
+                        }
                         break;
                     default:
                 }
